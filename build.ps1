@@ -60,8 +60,30 @@ $buildHash = (Get-FileHash -LiteralPath $buildExe -Algorithm SHA256).Hash
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $buildZip = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.1_FULL.zip'
 if (Test-Path -LiteralPath $buildZip) { throw 'ZIP already exists; choose a fresh output directory.' }
-[System.IO.Compression.ZipFile]::CreateFromDirectory($buildPackage, $buildZip,
-    [System.IO.Compression.CompressionLevel]::Optimal, $false)
+Add-Type -AssemblyName System.IO.Compression
+$buildStream = [System.IO.File]::Open($buildZip, [System.IO.FileMode]::CreateNew)
+$buildArchive = [System.IO.Compression.ZipArchive]::new($buildStream,
+    [System.IO.Compression.ZipArchiveMode]::Create, $false)
+try {
+    foreach ($buildFile in (Get-ChildItem -LiteralPath $buildPackage -File -Recurse -Force | Sort-Object FullName)) {
+        $buildRelative = $buildFile.FullName.Substring($buildPackage.Length + 1).Replace('\', '/')
+        [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($buildArchive,
+            $buildFile.FullName, $buildRelative, [System.IO.Compression.CompressionLevel]::Optimal)
+    }
+} finally {
+    $buildArchive.Dispose()
+    $buildStream.Dispose()
+}
+$buildZipCheck = [System.IO.Compression.ZipFile]::OpenRead($buildZip)
+try {
+    foreach ($buildEntry in $buildZipCheck.Entries) {
+        if ($buildEntry.FullName.Contains('\')) { throw 'Nonstandard ZIP path separator.' }
+    }
+    if ($null -eq $buildZipCheck.GetEntry('Source/.github/workflows/build-windows.yml') -or
+        $null -eq $buildZipCheck.GetEntry('Source/src/Program.cs')) {
+        throw 'Source files missing from ZIP.'
+    }
+} finally { $buildZipCheck.Dispose() }
 Write-Host ('EXE: ' + $buildExe)
 Write-Host ('FULL ZIP: ' + $buildZip)
 Write-Host ('SHA256: ' + $buildHash)

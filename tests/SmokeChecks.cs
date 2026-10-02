@@ -72,9 +72,18 @@ internal static class SmokeChecks {
     Check(sensitivity.Value == 1.250M && sensitivity.DecimalPlaces == 3, "Default sensitivity annotation 1.250");
     Button record = (Button)mainType.GetField("record", Member).GetValue(form);
     Check(record.Text.Contains("F8"), "Record button advertises F8");
-    form.CreateControl();
+    form.Show();
+    Application.DoEvents();
+    form.Refresh();
+    Application.DoEvents();
     using (Bitmap bitmap = new Bitmap(form.Width, form.Height)) {
      form.DrawToBitmap(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
+     int redPixels = 0;
+     for (int y = 0; y < bitmap.Height; y += 2) for (int x = 0; x < bitmap.Width; x += 2) {
+      Color pixel = bitmap.GetPixel(x, y);
+      if (pixel.R > 130 && pixel.G < 130 && pixel.B < 170) redPixels++;
+     }
+     Check(redPixels > 60, "Preview contains rendered red controls instead of a blank window");
      bitmap.Save(Path.GetFullPath(args[1]), System.Drawing.Imaging.ImageFormat.Png);
     }
     Check(File.Exists(Path.GetFullPath(args[1])), "UI preview generated");
