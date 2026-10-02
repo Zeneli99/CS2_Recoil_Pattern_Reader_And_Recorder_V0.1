@@ -34,7 +34,7 @@ internal static class SmokeChecks {
    Assembly program = Assembly.LoadFrom(executable);
    Check(IntPtr.Size == 8, "Windows x64 test process");
    Check(program.GetName().ProcessorArchitecture == ProcessorArchitecture.Amd64, "EXE targets AMD64");
-   Check(program.GetName().Version.ToString() == "0.1.0.0", "Version 0.1.0.0");
+   Check(program.GetName().Version.ToString() == "0.2.0.0", "Version 0.2.0.0");
    Check(program.EntryPoint.IsDefined(typeof(STAThreadAttribute), false), "GUI entry point uses STA");
    Type native = program.GetType("RecoilProbe.Native", true);
    uint rights = (uint)native.GetField("ReadOnlyRights", Static).GetRawConstantValue();
@@ -61,6 +61,7 @@ internal static class SmokeChecks {
     }
    } finally { Marshal.FreeHGlobal(address); }
 
+   Environment.SetEnvironmentVariable("CS2_PROBE_TEST_MODE", "1");
    Application.EnableVisualStyles();
    Application.SetCompatibleTextRenderingDefault(false);
    Type mainType = program.GetType("RecoilProbe.MainForm", true);
@@ -68,8 +69,10 @@ internal static class SmokeChecks {
     Check(form.ClientSize == new Size(540, 360), "Compact 540 by 360 interface");
     Check(form.BackColor == Color.FromArgb(18, 18, 20), "Dark theme");
     Check(!form.MaximizeBox && form.FormBorderStyle == FormBorderStyle.FixedSingle, "Fixed compact window");
-    NumericUpDown sensitivity = (NumericUpDown)mainType.GetField("sensitivity", Member).GetValue(form);
-    Check(sensitivity.Value == 1.250M && sensitivity.DecimalPlaces == 3, "Default sensitivity annotation 1.250");
+    TextBox sensitivity = (TextBox)mainType.GetField("sensitivity", Member).GetValue(form);
+    Check(sensitivity.ReadOnly && sensitivity.Text == "AUTO", "Sensitivity is automatic and cannot be manually annotated");
+    TextBox weapon = (TextBox)mainType.GetField("weapon", Member).GetValue(form);
+    Check(weapon.ReadOnly, "Weapon field is automatic");
     Button record = (Button)mainType.GetField("record", Member).GetValue(form);
     Check(record.Text.Contains("F8"), "Record button advertises F8");
     form.Show();
@@ -107,6 +110,13 @@ internal static class SmokeChecks {
      Set(vector, "pitch", -1.25F); Set(vector, "yaw", 2.5F); Set(vector, "roll", 0F);
      Set(sample, key, vector);
     }
+    Type identityType = program.GetType("RecoilProbe.GameIdentity", true);
+    object identity = Activator.CreateInstance(identityType, true);
+    Set(identity,"WeaponName","AK47");Set(identity,"DesignerName","weapon_ak47");
+    Set(identity,"ItemDefinitionIndex",7);Set(identity,"WeaponHandle",(uint)32775);
+    Set(identity,"Sensitivity",1.250F);Set(identity,"PawnMouseSensitivity",1F);
+    Set(identity,"FovSensitivityAdjust",1F);Set(identity,"Ammo",30);
+    Set(sample,"identity",identity);
     samples.Add(sample);
    }
    MethodInfo analyze = recorderType.GetMethod("Analyze", Static);
@@ -121,7 +131,7 @@ internal static class SmokeChecks {
 
    string testDirectory = Path.Combine(Path.GetTempPath(), "CS2ProbeSmoke_" + Guid.NewGuid().ToString("N"));
    object recorder = Activator.CreateInstance(recorderType, Member, null,
-    new object[] { testDirectory, "AK 47", 1.250M, new Action<string>(delegate(string s) { }) }, null);
+    new object[] { testDirectory, false, new Action<string>(delegate(string s) { }) }, null);
    Type gameType = program.GetType("RecoilProbe.Game", true);
    object game = FormatterServices.GetUninitializedObject(gameType);
    Set(game, "Build", 14188); Set(game, "ClientVersion", "synthetic"); Set(game, "EngineVersion", "synthetic");
@@ -129,20 +139,23 @@ internal static class SmokeChecks {
    try {
     System.Threading.Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("it-IT");
     MethodInfo save = recorderType.GetMethod("Save", Member);
-    object saved = save.Invoke(recorder, new object[] { game, samples, "Synthetic export check" });
+    object saved = save.Invoke(recorder, new object[] { game, samples, "Synthetic export check", false });
     string csv = Field<string>(saved, "CsvPath"), json = Field<string>(saved, "MetadataPath");
     Check(File.Exists(csv) && File.Exists(json), "CSV and JSON export succeeds");
     string[] rows = File.ReadAllLines(csv);
-    Check(rows.Length == 7 && rows[0].Split(',').Length == 27, "CSV contains header and all six samples");
-    for (int i = 1; i < rows.Length; i++) Check(rows[i].Split(',').Length == 27, "CSV row " + i + " has all fields");
+    Check(rows.Length == 7 && rows[0].Split(',').Length == 34, "CSV contains header and all six samples");
+    for (int i = 1; i < rows.Length; i++) Check(rows[i].Split(',').Length == 34, "CSV row " + i + " has all fields");
     Check(rows[1].StartsWith("-1,0.1,", StringComparison.Ordinal), "CSV baseline and decimal format are culture independent");
     Check(rows[2].Contains(",-1.25,2.5,0,"), "Angle signs and decimals are preserved");
     Dictionary<string, object> metadata = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(json));
     Check(Convert.ToInt32(metadata["observed_build"]) == 14188, "JSON records observed build");
     Check((bool)metadata["no_game_memory_writes"] && (bool)metadata["no_mouse_injection"], "JSON records read-only behavior");
+    Check((string)metadata["weapon_detected"]=="AK47" && Convert.ToInt32(metadata["weapon_definition_index"])==7,
+     "JSON records weapon identity from samples");
+    Check(Convert.ToDouble(metadata["sensitivity_detected"])==1.25, "JSON records detected sensitivity");
     Check(!(bool)metadata["amc_generated"] && !(bool)metadata["instantaneous_bullet_recoil_reconstruction_verified"],
      "JSON keeps AMC and recoil reconstruction unverified");
-    object again = save.Invoke(recorder, new object[] { game, samples, "Second synthetic export" });
+    object again = save.Invoke(recorder, new object[] { game, samples, "Second synthetic export", false });
     Check(Field<string>(again, "CsvPath") != csv && File.Exists(csv), "Repeated export creates a new recording");
    } finally { System.Threading.Thread.CurrentThread.CurrentCulture = previousCulture; }
 

@@ -1,9 +1,23 @@
 // Field offsets: a2x/cs2-dumper, MIT, commit 2d204b1400eb08accfb4098ad954602448dacb07.
-// Snapshot 2026-10-01; target game build 14188. Not verified against the user's process.
+// Snapshot 2026-10-01; target game build 14188. Capture tested on user-supplied V0.1 recording; new identity fields require a live test.
 namespace RecoilProbe {
  internal static class Layout {
   internal const int TargetBuild = 14188;
   internal const string SourceCommit = "2d204b1400eb08accfb4098ad954602448dacb07";
+  internal const int EntityList = 0x2715828;
+  internal const int Sensitivity = 0x255D998;
+  internal const int SensitivityValue = 0x58;
+  internal const int WeaponServices = 0x12F0;
+  internal const int ActiveWeapon = 0x60;
+  internal const int EntityIdentity = 0x10;
+  internal const int DesignerName = 0x20;
+  internal const int AttributeManager = 0x1290;
+  internal const int ItemView = 0x50;
+  internal const int ItemDefinitionIndex = 0x1BA;
+  internal const int Scoped = 0x1EA0;
+  internal const int PawnMouseSensitivity = 0x14A0;
+  internal const int FovSensitivityAdjust = 0x149C;
+  internal const int WeaponClip = 0x1928;
   internal const int LocalPawn = 0x2560698;
   internal const int LocalController = 0x2538008;
   internal const int ViewAngles = 0x25767E8;

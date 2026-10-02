@@ -3,6 +3,8 @@ name: Build Windows x64
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'Downloads/**'
   workflow_dispatch:
 
 permissions:
@@ -12,6 +14,8 @@ jobs:
   build:
     runs-on: windows-2022
     timeout-minutes: 15
+    permissions:
+      contents: write
     steps:
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -23,11 +27,53 @@ jobs:
       - name: Upload EXE and complete ZIP
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: CS2-Recoil-Reader-Recorder-V0.1-x64
+          name: CS2-Recoil-Reader-Recorder-V0.2-x64
           path: |
-            dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.1.exe
-            dist/CS2_Recoil_Reader_Recorder_V0.1_FULL.zip
+            dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.exe
+            dist/CS2_Recoil_Reader_Recorder_V0.2_FULL.zip
             dist/VERIFY.txt
             dist/UI_PREVIEW.png
+            dist/UI_CONVERTER.png
           if-no-files-found: error
           retention-days: 14
+      - name: Publish verified downloads in this repository
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $apiBase = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          function GitHubPost([string]$endpoint, $body) {
+            Invoke-RestMethod -Uri "$apiBase/$endpoint" -Method Post -Headers $headers -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 15 -Compress)
+          }
+          $current = Invoke-RestMethod -Uri "$apiBase/git/ref/heads/main" -Headers $headers
+          if ($current.object.sha -ne $env:GITHUB_SHA) {
+            Write-Host 'Source advanced during compilation; download the artifact from this run.'
+            exit 0
+          }
+          $parent = Invoke-RestMethod -Uri "$apiBase/git/commits/$env:GITHUB_SHA" -Headers $headers
+          $assets = @(
+            @{ local='dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.exe'; name='CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.exe' },
+            @{ local='dist/CS2_Recoil_Reader_Recorder_V0.2_FULL.zip'; name='CS2_Recoil_Reader_Recorder_V0.2_FULL.zip' },
+            @{ local='dist/VERIFY.txt'; name='VERIFY.txt' },
+            @{ local='dist/UI_PREVIEW.png'; name='UI_PREVIEW.png' },
+            @{ local='dist/UI_CONVERTER.png'; name='UI_CONVERTER.png' }
+          )
+          $entries = @()
+          $hashLines = @()
+          foreach ($asset in $assets) {
+            $bytes = [System.IO.File]::ReadAllBytes((Join-Path $env:GITHUB_WORKSPACE $asset.local))
+            $blob = GitHubPost 'git/blobs' @{ content=[Convert]::ToBase64String($bytes); encoding='base64' }
+            $entries += @{ path=("Downloads/V0.2/" + $asset.name); mode='100644'; type='blob'; sha=$blob.sha }
+            $hash = (Get-FileHash -LiteralPath $asset.local -Algorithm SHA256).Hash
+            $hashLines += "$hash  $($asset.name)"
+          }
+          $hashBlob = GitHubPost 'git/blobs' @{ content=($hashLines -join [char]10) + [char]10; encoding='utf-8' }
+          $entries += @{ path='Downloads/V0.2/SHA256.txt'; mode='100644'; type='blob'; sha=$hashBlob.sha }
+          $tree = GitHubPost 'git/trees' @{ base_tree=$parent.tree.sha; tree=$entries }
+          $commit = GitHubPost 'git/commits' @{ message='Publish verified V0.2 EXE, full source ZIP and checks [skip ci]'; tree=$tree.sha; parents=@($env:GITHUB_SHA) }
+          $check = Invoke-RestMethod -Uri "$apiBase/git/ref/heads/main" -Headers $headers
+          if ($check.object.sha -ne $env:GITHUB_SHA) { throw 'Branch advanced; verified artifact remains available in this run.' }
+          Invoke-RestMethod -Uri "$apiBase/git/refs/heads/main" -Method Patch -Headers $headers -ContentType 'application/json' -Body (@{ sha=$commit.sha; force=$false } | ConvertTo-Json -Compress) | Out-Null
+          Write-Host "Verified downloads published at commit $($commit.sha)"

@@ -1,54 +1,53 @@
-CS2 RECOIL PATTERN READER AND RECORDER V0.1
+CS2 RECOIL READER & RECORDER V0.2
 
-Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.1.exe.
-Questa prova salva CSV e JSON; NON genera ancora AMC.
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.exe.
+Arma equipaggiata e sensibilita' vengono lette automaticamente dal gioco.
 
-1. Avvia CS2 con -insecure nelle opzioni di avvio di Steam.
-2. Entra in una mappa di pratica LOCALE.
-3. Nel programma scrivi l'etichetta dell'arma e premi F8.
-4. Torna al gioco, attendi un secondo, poi spara un caricatore senza muovere il mouse.
-5. Rilascia il sinistro. Apri Registrazioni e conserva CSV e JSON.
-6. Invia entrambi i file per verificare letture e tempi.
+REGISTRARE
+1. CS2 con -insecure, mappa di pratica LOCALE.
+2. Equipaggia l'arma e aspetta che il programma la riconosca.
+3. F8, torna al gioco, attendi un secondo senza premere il sinistro.
+4. Spara un caricatore senza muovere il mouse e senza zoom/ADS.
+5. Rilascia il sinistro: CSV + JSON vengono salvati.
+6. Se "Genera AMC automaticamente" e' attivo, l'AMC e' in Registrazioni/AMC.
+Il report .report.json conserva metodo, sensibilita', tempi e limiti della conversione.
 
-F8 prima di sparare annulla; F8 durante lo spray termina e salva.
-La sensibilità 1.250 è annotata nei metadati e non cambia alcun input.
+CONVERTER
+Apri o trascina il ZIP della registrazione oppure il CSV/JSON.
+CSV e JSON devono rimanere insieme, con lo stesso nome.
+Uno ZIP deve contenere una sola coppia; non sceglie un'arma a caso fra piu' registrazioni.
+Funziona anche senza CS2 aperto.
+Per cambiare sensibilita' destinazione, usa il formato 1.250 (punto e tre decimali).
+Il nome/sensibilita' dei vecchi file V0.1 erano manuali: viene indicato chiaramente.
 
-COMPATIBILITA'
-Windows x64, .NET Framework 4.x.
-Layout target: build motore 14188; non confonderla con la build Steam.
-Una build diversa ferma la prova. Nessun aggiornamento automatico degli offset.
--insecure e IsValveDS non dimostrano che il server sia locale: scegli una mappa locale.
+AMC
+Due movimenti stimati per intervallo fra colpi, niente micro-smoothing per frame.
+Click sinistro hold, rilascio finale e al KeyUp, pausa separata 30000 ms.
+Importa in Bloody nella modalita' FINCHE' TIENI PREMUTO.
+La pausa ritarda il repeat della stessa attivazione; non blocca una nuova pressione.
+La conversione assume m_pitch=m_yaw=0.022, recoil scale=2 e tick a 64Hz.
+Non compensa la dispersione casuale.
+Gli angoli base letti nei file non misurano tutta la traiettoria fra i colpi.
+AMC di prova: la compensazione non e' garantita al 100%.
 
-VALORI
-Legge numero colpi, timestamp dell'ultima arma sparata, hash arma, tick,
-angoli di visuale e campi grezzi di CCSPlayer_AimPunchServices.
-Angoli base, velocità e tempi restano separati.
-Non è verificata la ricostruzione del recoil istantaneo applicato al proiettile.
-La dispersione dei proiettili non è lo stesso segnale del recoil.
-
-TEMPI
-observed_ms è il tempo di osservazione QPC, non il tempo esatto dello sparo.
-Il campione baseline può avere tempo negativo.
-game_last_fired_time e i tick sono conservati separatamente.
-1 ms è l'intervallo richiesto; il JSON riporta i ritardi misurati.
+CONTROLLI
+Rollback 29->28->29 contato una sola volta.
+Colpi mancanti, cambi di arma/sensibilita', zoom e movimento della visuale bloccano l'AMC.
+Le registrazioni grezze vengono conservate per esaminare il problema.
+Nuove registrazioni: arma tramite handle/ID dell'oggetto e sensibilita' tramite dwSensitivity.
+Build motore supportata: 14188; una build diversa ferma le letture.
+-insecure e IsValveDS non dimostrano da soli che il server sia locale.
 
 ACCESSO
 Solo PROCESS_VM_READ | PROCESS_QUERY_INFORMATION.
-Non scrive nella memoria del gioco. Non muove il mouse né simula click.
-Nomi di file unici, senza sovrascrivere registrazioni precedenti.
+Non scrive nella memoria di CS2, non muove il mouse, non simula click.
+La macro esportata sara' eseguita da Bloody, non dal recorder.
 
-VERIFICHE
-VERIFY.txt descrive le verifiche automatiche eseguite su Windows.
-Sono controlli su interfaccia, memoria del processo di test e dati sintetici.
-Non è stato eseguito CS2 nella compilazione remota: la registrazione in gioco
-e la correttezza delle traiettorie restano da provare.
+PACCHETTO
+EXE x64 pronto, Source completo, build.ps1, workflow, verifiche,
+anteprime dei due strumenti, SHA256 e AMC AK47 di esempio.
 
-RICOMPILARE
-Nella cartella Source esegui build.ps1 con PowerShell su Windows.
-Il workflow completo è Source/.github/workflows/build-windows.yml.
+GitHub Actions controlla compilazione, interfaccia, memoria del solo processo di test
+e convertitore su dati AK selezionati e casi di errore sintetici.
+Non esegue CS2: le nuove letture automatiche e la precisione nel gioco restano da provare.
 
-FUTURI AMC
-Traiettoria e tempi per colpo senza smoothing artificiale.
-LeftDown all'inizio, LeftUp alla fine e al rilascio.
-Pausa anti-repeat separata e fissa a 30000 ms.
-Non è promessa una compensazione perfetta al 100%.

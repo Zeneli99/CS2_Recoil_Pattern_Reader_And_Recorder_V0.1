@@ -1,0 +1,10 @@
+{
+  "tool": "CS2 Recoil Probe 0.1",
+  "observed_build": 14188,
+  "weapon_label_user_supplied": "AK47",
+  "sensitivity_user_supplied": 1.25,
+  "no_game_memory_writes": true,
+  "instantaneous_bullet_recoil_reconstruction_verified": false,
+  "fixture_description": "Selected shot-update states from user recording; includes stale baseline and rollback 29->28->29. Intermediate polling rows omitted.",
+  "source_archive_sha256": "1abfbcd8ad35316e8a6ca49bcff69cddfc6b6a85df5b3d1fb6b337f516a28032"
+}

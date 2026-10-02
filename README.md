@@ -1,43 +1,49 @@
-# CS2 Recoil Pattern Reader And Recorder V0.1
+# CS2 Recoil Reader & Recorder V0.2
 
-Prova offline per Windows x64: F8 arma o termina il record, il pulsante sinistro delimita lo spray. I valori vengono letti dalla memoria di cs2.exe e salvati in CSV e JSON.
+Windows x64. F8 arma il recorder; il sinistro delimita lo spray. Il programma legge automaticamente l'arma equipaggiata e la sensibilità dal gioco, salva CSV/JSON e può creare subito un AMC di prova.
 
-Questa versione registra i valori grezzi di AimPunchServices e i tempi osservati. Non genera ancora AMC: la ricostruzione del recoil istantaneo deve essere verificata sui dati del gioco.
+## Uso
 
-## Prova
+1. Estrai il pacchetto completo e apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.exe.
+2. Avvia CS2 con -insecure in una mappa di pratica locale.
+3. Arma e sensibilità compaiono automaticamente. F8, torna al gioco, attendi un secondo con il sinistro rilasciato e spara da recoil azzerato, senza muovere il mouse.
+4. Rilascia il sinistro. Con "Genera AMC automaticamente" attivo trovi la macro nella sottocartella Registrazioni/AMC.
+5. CSV e JSON rimangono nella cartella Registrazioni. L'AMC ha un report associato.
 
-1. Estrai il pacchetto completo e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.1.exe`.
-2. Apri CS2 con `-insecure` in una mappa di pratica locale.
-3. Scrivi l'etichetta dell'arma, premi F8, torna al gioco e attendi un secondo.
-4. Spara un caricatore tenendo fermo il mouse; rilascia il sinistro.
-5. Apri Registrazioni e conserva entrambi i file CSV e JSON.
+CONVERTER apre una singola registrazione ZIP oppure il CSV/JSON associato; supporta trascinamento. Non richiede che CS2 sia aperto. I file V0.1 rimangono leggibili ma il loro nome arma e la sensibilità erano annotazioni manuali: il convertitore lo segnala.
 
-La sensibilità 1.250 è solo un'annotazione. Il nome dell'arma è manuale; il relativo hash è letto dal gioco.
+La sensibilità destinazione usa per default il valore registrato. Per cambiarla, togli "Usa la sensibilità della registrazione" e scrivi, per esempio, 1.250: punto e tre decimali. Gli angoli sono convertiti nella scala della sensibilità destinazione; non vengono modificati i tempi.
 
-## Compatibilità e dati
+## AMC
 
-- Layout vincolato alla build motore 14188, snapshot del 2026-10-01.
-- Una build motore diversa ferma la prova; non scarica offset a runtime.
-- Il layout non è stato verificato su una sessione CS2 reale.
-- Gli angoli base del servizio non sono automaticamente il recoil istantaneo.
-- I tempi QPC rappresentano l'osservazione sul PC, non l'istante esatto dello sparo nel motore.
-- Il polling richiesto è 1 ms. I gap effettivi e gli aggiornamenti dei colpi saltati vengono riportati nel JSON.
-- Richiede -insecure e rifiuta IsValveDS; questi controlli non provano che il server sia locale. Usa una mappa di pratica locale.
+La conversione riproduce la prova già fatta sull'AK: angoli base registrati negli aggiornamenti dei colpi, due passaggi lineari stimati per intervallo, tempi ricostruiti dai tick. Non usa vecchi pattern o uno smoothing per frame.
 
-Apre il processo con PROCESS_VM_READ e PROCESS_QUERY_INFORMATION. Non scrive nella memoria del gioco e non simula input.
+La macro contiene LeftDown all'inizio, LeftUp a fine sequenza e nel gestore di rilascio, quindi una pausa finale separata di 30000 ms. Importala in Bloody nella modalità "finché tieni premuto". La pausa ritarda la ripetizione della stessa attivazione; non è un blocco globale su una nuova pressione.
 
-## Compilazione
+Il contatore tiene il massimo raggiunto: un rollback 29→28→29 non diventa un colpo numero 31. La conversione deduplica i tick del recoil e rifiuta colpi mancanti, cambi d'arma/sensibilità, zoom, aim punch esterno e movimento della visuale.
 
-Workflow: `.github/workflows/build-windows.yml`. Usa Windows Server 2022 e il compilatore .NET Framework x64 già presente; non richiede NuGet o Python.
+## Limiti da conoscere
 
-Per ricompilare il progetto in Windows:
+- Gli angoli di base non misurano tutta la curva di recoil fra i colpi. I due passaggi intermedi sono stime; l'AMC è una prova da verificare nel gioco, non una compensazione garantita.
+- m_pitch/m_yaw=0.022, weapon_recoil_scale=2.0 e tick a 64Hz sono assunti, non letti automaticamente. La sensibilità base viene letta realmente da dwSensitivity.
+- La conversione è per registrazioni senza zoom/ADS. Non compensa la dispersione casuale dei proiettili.
+- Il rilevamento usa handle dell'arma attiva, ID dell'oggetto e nome designer dell'entità; verifica l'identità e il numero seriale del riferimento. Niente nomi inseriti a mano per nuove registrazioni.
+- Layout vincolato alla build motore 14188: una build diversa ferma le letture. Nessun download di offset a runtime.
+- Richiede -insecure e rifiuta IsValveDS. Questi controlli da soli non dimostrano che la sessione sia locale: scegli una mappa di pratica locale.
+- I tempi observed_ms misurano l'osservazione sul PC. Il report conserva gli scarti rispetto ai tick.
+- Letture con PROCESS_VM_READ | PROCESS_QUERY_INFORMATION. Il programma non scrive nel gioco e non riproduce input; il file AMC verrà eseguito dal software del mouse.
 
-```powershell
-powershell.exe -NoProfile -File .\build.ps1
-```
+## Build e verifiche
 
-Il workflow verifica la compilazione, il caricamento dell'EXE, la lettura della sola memoria del processo di test, l'interfaccia e l'esportazione CSV/JSON di dati sintetici. Non esegue CS2 e non verifica il comportamento del recoil nel gioco.
+Workflow: .github/workflows/build-windows.yml. Compilazione Windows x64 con .NET Framework, senza Python o NuGet.
 
-Il pacchetto completo contiene EXE, sorgenti, workflow, verifica automatica e SHA256.
+Per ricompilare: powershell.exe -NoProfile -File .\build.ps1
 
-Fonte del layout: [a2x/cs2-dumper](https://github.com/a2x/cs2-dumper/tree/2d204b1400eb08accfb4098ad954602448dacb07), licenza MIT inclusa.
+Le verifiche eseguono l'EXE, controllano la memoria del solo processo di test, i due layout, CSV/JSON, import ZIP, validazione degli errori, geometria/tempi e pausa dell'AMC. Una fixture contiene gli aggiornamenti selezionati dalla registrazione AK dell'utente, incluso il rollback; i campioni intermedi sono omessi e le colonne diagnostiche non necessarie al convertitore sono sintetiche.
+
+Il pacchetto include EXE, tutti i sorgenti, workflow, fixture, risultati delle verifiche, anteprime, SHA256 e AMC AK di esempio. Il workflow pubblica gli stessi file verificati in Downloads/V0.2 dopo i controlli, senza avviare un'altra build.
+
+CS2 non viene eseguito in GitHub Actions. Le nuove letture automatiche dell'arma/sensibilità e la precisione della compensazione richiedono una prova reale.
+
+Fonte dei campi: a2x/cs2-dumper, snapshot 2d204b1400eb08accfb4098ad954602448dacb07, MIT (licenza inclusa). La struttura dell'handle mantiene l'indice e il seriale; i controlli di identità impediscono l'uso di riferimenti scaduti.
+
