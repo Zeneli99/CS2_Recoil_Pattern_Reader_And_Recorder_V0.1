@@ -57,7 +57,7 @@ namespace RecoilProbe {
    Ui.Label(this,"Arma · AUTO",20,96,230,21);Ui.Label(this,"Sensibilita' · AUTO",295,96,220,21);
    weapon=Ui.Text(this,"In attesa di CS2",20,120,250,true);
    sensitivity=Ui.Text(this,"AUTO",295,120,225,true);
-   detected=Ui.Label(this,"Apri una mappa di pratica locale con -insecure.",20,150,500,26);
+   detected=Ui.Label(this,"Apri una mappa di pratica locale con -insecure.",20,150,500,29);
    folder=Ui.Text(this,Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"Registrazioni"),20,183,395,false);
    choose=Ui.Button(this,"Cartella",425,181,95,28);
    choose.Click+=delegate{
@@ -97,7 +97,7 @@ namespace RecoilProbe {
     Ui.Post(this,delegate{
      detecting=false;if(running||closing)return;
      if(info!=null) {
-      SetIdentity(info);detected.Text="Arma e sensibilita' lette dal gioco · build "+Layout.TargetBuild+
+      SetIdentity(info);detected.Text="Arma e sensibilita' lette dal gioco · build "+RecoilProbe.Layout.TargetBuild+
        (info.Scoped?" · zoom attivo":"");
       detected.ForeColor=info.Scoped?Color.FromArgb(235,135,75):Color.FromArgb(170,205,180);
      } else {
