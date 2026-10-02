@@ -1,0 +1,33 @@
+name: Build Windows x64
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compile, check and package x64
+        shell: powershell
+        run: ./build.ps1
+      - name: Upload EXE and complete ZIP
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: CS2-Recoil-Reader-Recorder-V0.1-x64
+          path: |
+            dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.1.exe
+            dist/CS2_Recoil_Reader_Recorder_V0.1_FULL.zip
+            dist/VERIFY.txt
+            dist/UI_PREVIEW.png
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,54 @@
+CS2 RECOIL PATTERN READER AND RECORDER V0.1
+
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.1.exe.
+Questa prova salva CSV e JSON; NON genera ancora AMC.
+
+1. Avvia CS2 con -insecure nelle opzioni di avvio di Steam.
+2. Entra in una mappa di pratica LOCALE.
+3. Nel programma scrivi l'etichetta dell'arma e premi F8.
+4. Torna al gioco, attendi un secondo, poi spara un caricatore senza muovere il mouse.
+5. Rilascia il sinistro. Apri Registrazioni e conserva CSV e JSON.
+6. Invia entrambi i file per verificare letture e tempi.
+
+F8 prima di sparare annulla; F8 durante lo spray termina e salva.
+La sensibilità 1.250 è annotata nei metadati e non cambia alcun input.
+
+COMPATIBILITA'
+Windows x64, .NET Framework 4.x.
+Layout target: build motore 14188; non confonderla con la build Steam.
+Una build diversa ferma la prova. Nessun aggiornamento automatico degli offset.
+-insecure e IsValveDS non dimostrano che il server sia locale: scegli una mappa locale.
+
+VALORI
+Legge numero colpi, timestamp dell'ultima arma sparata, hash arma, tick,
+angoli di visuale e campi grezzi di CCSPlayer_AimPunchServices.
+Angoli base, velocità e tempi restano separati.
+Non è verificata la ricostruzione del recoil istantaneo applicato al proiettile.
+La dispersione dei proiettili non è lo stesso segnale del recoil.
+
+TEMPI
+observed_ms è il tempo di osservazione QPC, non il tempo esatto dello sparo.
+Il campione baseline può avere tempo negativo.
+game_last_fired_time e i tick sono conservati separatamente.
+1 ms è l'intervallo richiesto; il JSON riporta i ritardi misurati.
+
+ACCESSO
+Solo PROCESS_VM_READ | PROCESS_QUERY_INFORMATION.
+Non scrive nella memoria del gioco. Non muove il mouse né simula click.
+Nomi di file unici, senza sovrascrivere registrazioni precedenti.
+
+VERIFICHE
+VERIFY.txt descrive le verifiche automatiche eseguite su Windows.
+Sono controlli su interfaccia, memoria del processo di test e dati sintetici.
+Non è stato eseguito CS2 nella compilazione remota: la registrazione in gioco
+e la correttezza delle traiettorie restano da provare.
+
+RICOMPILARE
+Nella cartella Source esegui build.ps1 con PowerShell su Windows.
+Il workflow completo è Source/.github/workflows/build-windows.yml.
+
+FUTURI AMC
+Traiettoria e tempi per colpo senza smoothing artificiale.
+LeftDown all'inizio, LeftUp alla fine e al rilascio.
+Pausa anti-repeat separata e fissa a 30000 ms.
+Non è promessa una compensazione perfetta al 100%.
