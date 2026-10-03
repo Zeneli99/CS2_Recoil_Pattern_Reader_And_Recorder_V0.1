@@ -230,6 +230,7 @@ namespace RecoilProbe {
   }
   internal static string Save(WeaponSnapshot data,string amcPath) {
    WeaponDataReader.Validate(data);string path=Path.ChangeExtension(Path.GetFullPath(amcPath),".recoil.json");
+   if(File.Exists(path))throw new InvalidOperationException("Parametri gia' salvati. Scegli un nome nuovo.");
    Directory.CreateDirectory(Path.GetDirectoryName(path));
    using(FileStream stream=new FileStream(path,FileMode.CreateNew,FileAccess.Write))
    using(StreamWriter writer=new StreamWriter(stream,new UTF8Encoding(false)))writer.Write(RecordingIO.Serializer().Serialize(data));
