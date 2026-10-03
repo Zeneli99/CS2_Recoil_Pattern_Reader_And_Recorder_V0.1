@@ -30,6 +30,21 @@ namespace RecoilProbe {
   internal const int WeaponRecoilIndex = 0x1A24;
   internal const int WeaponRecoilIndexFloat = 0x1A28;
   internal const int WeaponLastShotTime = 0x1B68;
+  // Non-schema VData pointer candidate. Accepted only after name, bounds and stable-read checks.
+  internal const int WeaponVData = 0x388;
+  internal const int WeaponMode = 0x1A00;
+  internal const int WeaponBurst = 0x1A2C;
+  internal const int WeaponReloading = 0x1A3C;
+  internal const int VDataMaxClip = 0x4D0;
+  internal const int VDataName = 0x720;
+  internal const int VDataFullAuto = 0x72D;
+  internal const int VDataBullets = 0x730;
+  internal const int VDataCycle = 0x738;
+  internal const int VDataRecoilAngle = 0x790;
+  internal const int VDataRecoilAngleVariance = 0x798;
+  internal const int VDataRecoilMagnitude = 0x7A0;
+  internal const int VDataRecoilMagnitudeVariance = 0x7A8;
+  internal const int VDataRecoilSeed = 0x7D4;
   internal const int LocalPawn = 0x2560698;
   internal const int LocalController = 0x2538008;
   internal const int ViewAngles = 0x25767E8;

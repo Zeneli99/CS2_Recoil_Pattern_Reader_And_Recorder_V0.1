@@ -38,7 +38,7 @@ namespace RecoilProbe {
   }
   internal static string Sens(float value){return value.ToString("0.000###",CultureInfo.InvariantCulture);}
  }
- internal sealed class MainForm : Form {
+ internal sealed class RecorderForm : Form {
   private TextBox weapon,sensitivity,folder,log;
   private Label detected;
   private Button record,open,convert,choose,report,check;
@@ -49,9 +49,9 @@ namespace RecoilProbe {
   private bool running,closing,detecting;
   private System.Windows.Forms.Timer monitor;
   private const int HotkeyId=8118;
-  internal MainForm() {
-   Ui.Style(this,"CS2 RECOIL INTERNO · V0.2.5");Ui.Title(this,"CS2 RECOIL INTERNO");
-   Ui.Label(this,"V0.2.5",485,25,45,24);
+  internal RecorderForm() {
+   Ui.Style(this,"CS2 RECORDER DIAGNOSTICO · V0.3");Ui.Title(this,"RECORDER DIAGNOSTICO");
+   Ui.Label(this,"V0.3",485,25,45,24);
    Button page=Ui.Button(this,"RECOIL INTERNO",20,54,145,29);page.Enabled=false;
    convert=Ui.Button(this,"CONVERTER",180,54,145,29);
    convert.Click+=delegate{using(ConverterForm form=new ConverterForm())form.ShowDialog(this);};
@@ -180,10 +180,11 @@ namespace RecoilProbe {
   private Button load,convert;
   private CheckBox original;
   private RecordingData data;
+  private WeaponSnapshot snapshot;
   private AmcInput amc;
   private bool busy;
   internal ConverterForm() {
-   Ui.Style(this,"CS2 AMC CONVERTER · V0.2.5");Ui.Title(this,"AMC CONVERTER");
+   Ui.Style(this,"CS2 AMC CONVERTER · V0.3");Ui.Title(this,"AMC CONVERTER");
    Ui.Label(this,"Apri AMC / ZIP / CSV / JSON · oppure trascina un file.",20,55,500,24);
    source=Ui.Text(this,"Nessuna registrazione caricata",20,87,375,true);
    load=Ui.Button(this,"APRI FILE",410,85,110,29);load.Click+=delegate{Choose();};
@@ -216,20 +217,26 @@ namespace RecoilProbe {
    }
   }
   private void Busy(bool value) {
-   busy=value;load.Enabled=!value;convert.Enabled=!value && (data!=null||amc!=null);
+   busy=value;load.Enabled=!value;convert.Enabled=!value && (data!=null||amc!=null||snapshot!=null);
    original.Enabled=!value;target.Enabled=!value && !original.Checked;
   }
   private void LoadRecording(string path) {
-   if(busy)return;Busy(true);data=null;amc=null;source.Text=Path.GetFileName(path);log.Text="Controllo i dati...";
+   if(busy)return;Busy(true);data=null;amc=null;snapshot=null;source.Text=Path.GetFileName(path);log.Text="Controllo i dati...";
    ThreadPool.QueueUserWorkItem(delegate(object ignored){
-    RecordingData loaded=null;AmcInput loadedAmc=null;int shots=0;string error=null;
+    RecordingData loaded=null;AmcInput loadedAmc=null;WeaponSnapshot loadedSnapshot=null;int shots=0;string error=null;
     try {
      if(String.Equals(Path.GetExtension(path),".amc",StringComparison.OrdinalIgnoreCase))
       loadedAmc=AmcInput.Load(path);
+     else if(WeaponSnapshotIO.TryLoad(path,out loadedSnapshot))shots=loadedSnapshot.Native.MaxClip;
      else {loaded=RecordingIO.Load(path);shots=AmcConverter.Points(loaded).Count;}
     } catch(Exception ex){error=ex.Message;}
     Ui.Post(this,delegate{
-     if(error!=null){summary.Text="File non convertibile";log.Text=error;data=null;amc=null;}
+     if(error!=null){summary.Text="File non convertibile";log.Text=error;data=null;amc=null;snapshot=null;}
+     else if(loadedSnapshot!=null) {
+      snapshot=loadedSnapshot;target.Text=snapshot.Sensitivity.ToString("0.000",CultureInfo.InvariantCulture);
+      summary.Text=snapshot.Weapon+" · sens "+Ui.Sens(snapshot.Sensitivity)+" · "+shots+" colpi\r\nVData senza sparare · MODELLO SPERIMENTALE";
+      log.Text="Parametri estratti + modello non verificato. Non e' una traiettoria letta direttamente.";
+     }
      else if(loadedAmc!=null) {
       amc=loadedAmc;target.Text=amc.Sensitivity.ToString("0.000",CultureInfo.InvariantCulture);
       summary.Text=amc.WeaponName+" · sens "+amc.Sensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+
@@ -253,18 +260,19 @@ namespace RecoilProbe {
     IdentityReader.ValidSensitivity(value);
   }
   private void Export() {
-   if((data==null&&amc==null)||busy)return;double sens=amc!=null?amc.Sensitivity:data.Sensitivity;
+   if((data==null&&amc==null&&snapshot==null)||busy)return;
+   double sens=snapshot!=null?snapshot.Sensitivity:amc!=null?amc.Sensitivity:data.Sensitivity;
    if(!original.Checked && !TryTarget(target.Text,out sens)){log.Text="Scrivi la sensibilita' come 1.250 (punto e tre decimali).";return;}
    string output;
    using(SaveFileDialog dialog=new SaveFileDialog()){
-    dialog.Filter="Macro Bloody (*.amc)|*.amc";dialog.FileName=amc!=null?AmcConverter.SuggestedFileName(amc,sens):AmcConverter.SuggestedFileName(data,sens);
+    dialog.Filter="Macro Bloody (*.amc)|*.amc";dialog.FileName=snapshot!=null?NoFireGenerator.SuggestedFileName(snapshot,sens):amc!=null?AmcConverter.SuggestedFileName(amc,sens):AmcConverter.SuggestedFileName(data,sens);
     dialog.OverwritePrompt=true;
     if(dialog.ShowDialog(this)!=DialogResult.OK)return;output=dialog.FileName;
    }
    Busy(true);log.Text="Creo AMC e report...";
    ThreadPool.QueueUserWorkItem(delegate(object ignored){
     AmcResult result=null;string error=null;
-    try{result=amc!=null?AmcConverter.Smooth(amc,output,sens):AmcConverter.Convert(data,output,sens);}catch(Exception ex){error=ex.Message;}
+    try{result=snapshot!=null?NoFireGenerator.Convert(snapshot,output,sens):amc!=null?AmcConverter.Smooth(amc,output,sens):AmcConverter.Convert(data,output,sens);}catch(Exception ex){error=ex.Message;}
     Ui.Post(this,delegate{
      log.Text=error??((result.SourceKind=="AMC"?"AMC":result.Shots+" colpi")+" · "+result.MoveCommands+" MoveR · "+
       result.ActiveDurationMs.ToString("F0",CultureInfo.InvariantCulture)+" ms\r\nAMC e report salvati.");

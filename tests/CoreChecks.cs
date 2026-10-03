@@ -62,9 +62,10 @@ internal static class CoreChecks {
     while((bool)typeof(ConverterForm).GetField("busy",flags).GetValue(form)&&loading.ElapsedMilliseconds<3000) {
      Application.DoEvents();Thread.Sleep(10);
     }
-    Check(typeof(ConverterForm).GetField("amc",flags).GetValue(form)!=null&&
+    string inputField=amcPath.EndsWith(".recoil.json",StringComparison.OrdinalIgnoreCase)?"snapshot":"amc";
+    Check(typeof(ConverterForm).GetField(inputField,flags).GetValue(form)!=null&&
      ((Button)typeof(ConverterForm).GetField("convert",flags).GetValue(form)).Enabled,
-     "Converter opens an AMC asynchronously and enables export without a running game");
+     "Converter opens "+inputField+" asynchronously and enables export without a running game");
    }
    form.Refresh();Application.DoEvents();
    foreach(Control child in form.Controls)
@@ -449,6 +450,7 @@ internal static class CoreChecks {
    string csv=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.csv"));
    string json=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.json"));
    RecordingData legacy=RecordingIO.Parse(csv,json);
+   NoFireChecks.Run(output,legacy,Check,Reject);
    Check(legacy.Sensitivity==1.25&&legacy.WeaponName=="AK47"&&!legacy.AutomaticIdentity,
     "V0.1 imports manual labels without claiming automatic verification");
    Check(AmcConverter.Points(legacy).Count==30,"Recorded rollback 29->28->29 deduplicates to 30 shots");
@@ -577,6 +579,8 @@ internal static class CoreChecks {
    Preview(new ConverterForm(),Path.Combine(output,"UI_CONVERTER.png"));
    Preview(new ConverterForm(),Path.Combine(output,"UI_CONVERTER_AMC.png"),
     Path.Combine(fixtures,"AK47_ORIGINAL_50MS_V022.amc"));
+   Preview(new ConverterForm(),Path.Combine(output,"UI_CONVERTER_NO_FIRE.png"),
+    Path.Combine(output,"AK47_NO_FIRE_SYNTHETIC_TEST.recoil.json"));
    Check(File.Exists(Path.Combine(output,"UI_CONVERTER.png")),"Converter preview fits the compact window");
    Console.WriteLine("PASS: "+count+" conversion and recording regression checks.");
    Console.WriteLine("No CS2 process was opened. Live weapon/sensitivity detection and recoil accuracy need an in-game test.");

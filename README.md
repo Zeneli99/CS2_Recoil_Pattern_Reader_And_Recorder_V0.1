@@ -1,4 +1,39 @@
-# CS2 Recoil Reader & Recorder V0.2.5
+# CS2 Recoil Reader & Recorder V0.3 — senza sparare, sperimentale
+
+La schermata principale non avvia piu' una registrazione: **ESTRAI + AMC / F8** legge i parametri VData dell'arma attiva e crea una macro di prova senza sparare. Il recorder precedente rimane separato in **RECORDER / TEST**, solo per confronto e diagnostica.
+
+## Prova rapida V0.3
+
+1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.exe`.
+2. Avvia CS2 con `-insecure`, in una mappa offline ospitata nello stesso processo. Per la prima prova usa AK47.
+3. Ricarica completamente, togli zoom/burst, lascia il sinistro rilasciato e aspetta il reset del recoil.
+4. Premi **F8 senza sparare**. In `Estrazioni` trovi `.amc`, `.recoil.json` e `.report.json`.
+5. Importa l'AMC in Bloody nella modalita' finche' tieni premuto. La macro e' sperimentale: questo passaggio e' una prova reale, non una verifica gia' eseguita.
+6. Se l'estrazione fallisce, premi REPORT e conserva `Diagnostica_CS2.txt`. Se il movimento non corrisponde, conserva i due JSON insieme all'AMC: contengono i valori usati, non occorre ricreare lo spray per rigenerare il file.
+
+CONVERTER legge anche il nuovo `.recoil.json`: funziona senza CS2 aperto, rigenera la macro e permette una sensibilita' diversa senza alterare i tempi. Non e' un decrittatore MGN.
+
+## Cosa viene estratto e cosa no
+
+Sono letti arma/ID, sensibilita' base, capacita' caricatore, full-auto, modalita', numero di proiettili, cycle time, recoil seed, angolo/varianza e magnitudine/varianza. Il puntatore VData `weapon+0x388` e' un candidato non nominato nello schema: viene accettato soltanto se il nome coincide con l'entita' attiva, i campi sono plausibili e due letture stabili concordano. Se il layout non corrisponde, il programma si ferma; non sostituisce i parametri dell'arma con una tabella inventata.
+
+**Non viene estratta una traiettoria nativa dei proiettili.** Gli impulsi e il decadimento vengono ricostruiti con un modello legacy non ancora verificato nel motore CS2 corrente. RNG Park-Miller/shuffle, tabella di 64 impulsi, smoothing della varianza e soppressione iniziale sono ipotesi esplicite. I valori del modello si trovano in `Model`; quelli letti in `Native`. Non vengono letti automaticamente m_pitch/m_yaw, recoil scale o costanti di decadimento: i default sperimentali sono 0.022/0.022, 2.0, 8/18/4.5, soppressione 4 colpi a 0.75 e varianza 0.55. Neanche la latenza tra pressione e primo colpo viene misurata: il modello assume primo colpo immediato. Non sono compensate dispersione casuale, movimento del giocatore o shake visuale.
+
+L'output conserva i punti **simulati** dei colpi e arrotonda la posizione cumulativa per evitare deriva. I MoveR sono interpolati in passaggi di circa 10 ms, non a 1 ms. La macro include LeftDown, LeftUp finale e al KeyUp, quindi 30000 ms di anti-repeat. La pausa non impedisce una nuova pressione. Il rilascio e' stimato dal ciclo VData e dal caricatore, non registrato. Questi accorgimenti non provano che i colpi siano centrati.
+
+La modalita' senza sparare supporta solo full-auto, modalita' primaria senza zoom/burst, caricatore pieno e recoil azzerato. Per altri casi si ferma. Restano i controlli build 14188, `-insecure`, IsValveDS e presenza del modulo server locale; quest'ultimo non dimostra da solo che nessun client remoto sia connesso: usa una mappa offline. Il processo e' esterno e in sola lettura; nessuna DLL, hook, scrittura nella memoria del gioco o simulazione di input. Bloody esegue l'AMC, non questo programma.
+
+## Verifiche e distribuzione V0.3
+
+`build.ps1` compila l'EXE x64 con .NET Framework su Windows. GitHub Actions esegue i controlli esistenti e quelli nuovi su lettura VData nel solo processo di test, errori di puntatore/nome/flag, RNG, primo impulso confrontato con la fixture AK, ripetibilita', JSON, tempi, sensibilita', punti simulati e anteprime. **CS2 e Bloody non vengono avviati in CI.** Il primo impulso coincidente non dimostra che l'intero algoritmo corrente sia corretto.
+
+Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. `Esempio_NoFire_SINTETICO` contiene un esempio con parametri AK costruiti dal test, NON estratti da una sessione live. Gli esempi precedenti restano separati; non sono i risultati della nuova estrazione. I download della V0.3 vengono pubblicati in `Downloads/V0.3` solo dopo i controlli.
+
+Fonti tecniche: [schema della build fissata](https://github.com/a2x/cs2-dumper/tree/2d204b1400eb08accfb4098ad954602448dacb07/output), [implementazione legacy della tabella](https://github.com/SwagSoftware/Kisak-Strike/blob/master/game/shared/cstrike15/cs_weapon_parse.cpp) e [stream legacy](https://github.com/SwagSoftware/Kisak-Strike/blob/master/vstdlib/random.cpp). Le fonti legacy non sono una prova dell'implementazione attuale di CS2.
+
+---
+
+## Documentazione della modalita' recorder precedente (V0.2.5)
 
 Windows x64. F8 arma il lettore integrato; il sinistro delimita lo spray. Il programma legge automaticamente arma, sensibilità e stato interno del recoil dal gioco, salva CSV/JSON diagnostici e crea subito un AMC di prova.
 
@@ -65,7 +100,7 @@ Per ricompilare: powershell.exe -NoProfile -File .\build.ps1
 
 Le verifiche misurano anche ritardo, durata e guadagni su prove sintetiche quantizzate, controllano il rilascio registrato e impediscono la conversione delle prove AMC in pattern. Eseguono l'EXE, controllano la memoria del solo processo di test, i due layout, CSV/JSON, import ZIP, validazione degli errori, geometria/tempi e pausa dell'AMC, preservazione dei punti originali e import/suddivisione degli AMC. Una fixture contiene gli aggiornamenti selezionati dalla registrazione AK dell'utente, incluso il rollback; i campioni intermedi sono omessi e le colonne diagnostiche non necessarie al convertitore sono sintetiche.
 
-Il pacchetto include EXE, tutti i sorgenti, workflow, fixture, risultati delle verifiche, anteprime, SHA256 e AMC AK di esempio. La cartella AMC_AK47 contiene anche la versione moderata dell'AMC importato: ogni punto originale rimane identico. Il workflow pubblica gli stessi file verificati in Downloads/V0.2.5 dopo i controlli, senza avviare un'altra build.
+Il pacchetto include anche gli esempi precedenti. La cartella AMC_AK47 contiene la versione moderata dell'AMC importato: ogni punto originale rimane identico. Non confonderla con l'output della nuova modalita' senza sparare.
 
 CS2 non viene eseguito in GitHub Actions. Le nuove letture automatiche dell'arma/sensibilità e la precisione della compensazione richiedono una prova reale.
 

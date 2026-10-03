@@ -1,3 +1,31 @@
+CS2 SENZA SPARARE — V0.3 SPERIMENTALE
+
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.exe.
+CS2 con -insecure, mappa OFFLINE ospitata sul PC; prima prova con AK47.
+Ricarica completamente. Togli zoom/burst, rilascia il sinistro e attendi il reset recoil.
+Premi ESTRAI + AMC o F8: NON devi sparare per generare la macro.
+In Estrazioni trovi AMC + .recoil.json (parametri) + .report.json (metodo e ipotesi).
+Importa l'AMC in Bloody nella modalita' FINCHE' TIENI PREMUTO.
+Smooth moderato circa 10 ms; LeftDown/LeftUp; anti-repeat finale di 30000 ms.
+
+ATTENZIONE: arma, sensibilita' e VData vengono letti, ma la traiettoria viene SIMULATA.
+Il modello legacy e le sue costanti non sono ancora verificati nel CS2 corrente.
+Pitch/yaw 0.022, recoil scale 2, decadimento e primo colpo immediato sono assunti.
+Non sono compensati dispersione casuale o shake visuale. Nessuna promessa del 100%.
+Supporta full-auto, modalita' primaria senza zoom/burst, caricatore pieno, recoil azzerato.
+Il puntatore VData e' un candidato validato da nome, limiti e doppia lettura stabile.
+Se fallisce non inventa i parametri: premi REPORT e conserva Diagnostica_CS2.txt.
+Il programma legge soltanto il processo CS2: non inietta DLL e non riproduce input.
+
+Il CONVERTER apre anche .recoil.json senza CS2, per rigenerare o cambiare sensibilita'.
+La cartella Esempio_NoFire_SINTETICO e' un esempio di test, NON un'estrazione live.
+RECORDER / TEST mantiene i vecchi strumenti separati per diagnostica: non e' necessario
+per la nuova generazione senza sparare.
+
+GitHub verifica compilazione, interfaccia, lettura nel processo di test e conversione.
+Non esegue CS2 o Bloody: la lettura live e la precisione dei colpi restano da provare.
+
+DOCUMENTAZIONE DEL RECORDER PRECEDENTE
 TEST AMC — V0.2.5
 Premi TEST AMC... e seleziona lo stesso AMC che esegui in Bloody.
 In CS2: arma e sensibilita' dell'AMC, F8, poi spray completo con macro attiva e mouse fermo.
@@ -7,7 +35,7 @@ La precisione dei proiettili non e' ancora verificata. Leggi ANALISI_AK47.md.
 
 CS2 RECOIL INTERNO V0.2.5
 
-Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.5.exe.
+Apri RECORDER / TEST dall'EXE V0.3.
 Arma equipaggiata e sensibilita' vengono lette automaticamente dal gioco.
 
 LETTURA DIRETTA DEL RECOIL

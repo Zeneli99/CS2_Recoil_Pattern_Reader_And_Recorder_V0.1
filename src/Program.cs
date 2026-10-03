@@ -12,8 +12,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: System.Reflection.AssemblyTitle("CS2 Recoil Probe")]
-[assembly: System.Reflection.AssemblyVersion("0.2.5.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.2.5.0")]
+[assembly: System.Reflection.AssemblyVersion("0.3.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.3.0.0")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("CoreChecks")]
 
 namespace RecoilProbe {
@@ -249,7 +249,7 @@ namespace RecoilProbe {
    }
    throw new InvalidOperationException("Campione incoerente durante il cambio di colpo.");
   }
-  private string StartupContext() {
+  internal string StartupContext() {
    return "PID: "+Pid+"\r\nBuild letta: "+Build+"\r\nBuild supportata: "+Layout.TargetBuild+
     "\r\nclient.dll: "+ClientVersion+" @0x"+Client.ToString("X",CultureInfo.InvariantCulture)+
     "\r\nengine2.dll: "+EngineVersion+" @0x"+Engine.ToString("X",CultureInfo.InvariantCulture);

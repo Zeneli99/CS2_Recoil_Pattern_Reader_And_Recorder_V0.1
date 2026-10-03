@@ -19,8 +19,10 @@ namespace RecoilProbe {
   public bool WeaponAndSensitivityAutomaticallyRead, InstantaneousRecoilVerified = false;
   public bool DeterministicRecoilStateDirectlyRead, BallisticTrajectoryDirectlyRead, ServerSpreadIncluded;
   public RecoilDynamicsFit Dynamics;
+  public WeaponSnapshot NoFireInput;
+  public bool RecoilSequenceReconstructed, CurrentEngineAlgorithmVerified;
   public string Method = "Direct game-memory recoil state replay: angle, angular velocity and native tick are fitted to the recording, integrated at 1/128 second, bounded to monotonic moderate progress and emitted around 10ms; every recorded shot anchor remains exact.";
-  public string Assumptions = "m_pitch=0.022; m_yaw=0.022; weapon_recoil_scale=2.0; game_tick_hz=64; deterministic recoil only; server spread is not readable here; MoveR uses raw mouse counts.";
+  public string Assumptions = "m_pitch=0.022; m_yaw=0.022; weapon_recoil_scale=2.0; game_tick_hz=64; deterministic recoil only; random spread is not compensated; MoveR uses raw mouse counts.";
  }
  internal static class AmcConverter {
   private sealed class Group {
@@ -112,16 +114,16 @@ namespace RecoilProbe {
   private static double DeltaAngle(double a,double b) {
    double delta=(a-b)%360; if(delta>180)delta-=360;if(delta< -180)delta+=360;return delta;
   }
-  private static int Round(double value) {
+  internal static int Round(double value) {
    if(Double.IsNaN(value)||Double.IsInfinity(value)||Math.Abs(value)>10000000)
     throw new InvalidOperationException("Movimento AMC fuori scala.");
    return checked((int)Math.Round(value,MidpointRounding.AwayFromZero));
   }
-  private static void Delay(List<string> commands,int ms) {
+  internal static void Delay(List<string> commands,int ms) {
    if(ms<0)throw new InvalidOperationException("Timeline AMC non valida.");
    while(ms>0){int step=Math.Min(999,ms);commands.Add("Delay "+step+" ms");ms-=step;}
   }
-  private static void Move(List<string> commands,int dx,int dy,AmcResult result) {
+  internal static void Move(List<string> commands,int dx,int dy,AmcResult result) {
    // Larger deltas are split at the same scheduled time, not spread into micro delays.
    while(dx!=0 || dy!=0) {
     int x=Math.Max(-127,Math.Min(127,dx)),y=Math.Max(-127,Math.Min(127,dy));
@@ -244,7 +246,7 @@ namespace RecoilProbe {
    result.TotalX=lastX;result.TotalY=lastY;result.ActiveDurationMs=data.ReleaseTime;
    return Save(result,commands,output);
   }
-  private static AmcResult Save(AmcResult result,List<string> commands,string output) {
+  internal static AmcResult Save(AmcResult result,List<string> commands,string output) {
    string path=Path.GetFullPath(output);
    if(!String.Equals(Path.GetExtension(path),".amc",StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException("L'output deve avere estensione .amc.");
