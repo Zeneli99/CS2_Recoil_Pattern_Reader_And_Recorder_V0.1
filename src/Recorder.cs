@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace RecoilProbe {
  internal sealed class CaptureResult {
-  public string CsvPath, MetadataPath, AmcPath, AmcError, Reason;
+  public string CsvPath, MetadataPath, AmcPath, AmcError, Reason, ExecutionReportPath, ExecutionError;
   public int Samples, Shots, MissedShotUpdates;
   public double MaxGapMs, MedianGapMs, DurationMs, MaxReadMs;
  }
@@ -15,20 +15,24 @@ namespace RecoilProbe {
   internal volatile bool StopRequested;
   private readonly string directory;
   private readonly bool autoAmc;
+  private readonly AmcInput expectedAmc;
   private readonly Action<string> status;
   private readonly Action<GameIdentity> identity;
   internal Recorder(string folder,bool exportAmc,Action<string> progress)
    : this(folder,exportAmc,progress,delegate(GameIdentity value){}) { }
-  internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected) {
-   directory=folder;autoAmc=exportAmc;status=progress;identity=detected;
+  internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected)
+   : this(folder,exportAmc,progress,detected,null) { }
+  internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected,AmcInput test) {
+   directory=folder;autoAmc=exportAmc&&test==null;status=progress;identity=detected;expectedAmc=test;
   }
   internal CaptureResult Run() {
    using(Game game=new Game()) {
     bool timerActive=Native.timeBeginPeriod(1)==0;
     try {
      GameIdentity initial=game.ReadIdentity();identity(initial);
+     if(expectedAmc!=null)AmcExecutionCheck.ValidateIdentity(expectedAmc,initial);
      status(initial.WeaponName+" · sens "+initial.Sensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+
-      " · torna al gioco e spara quando il recoil e' azzerato.");
+      (expectedAmc==null?" · torna al gioco e spara quando il recoil e' azzerato.":" · PROVA AMC: esegui la macro in Bloody con il mouse fermo."));
      List<Sample> samples=new List<Sample>();Sample baseline=null;
      double pressTime=0;int stableReads=0,attempts=0;
      string reason="Rilascio del pulsante sinistro";bool settingsChanged=false;
@@ -45,6 +49,7 @@ namespace RecoilProbe {
         throw new InvalidOperationException("Arma o sensibilita' cambiate durante l'inizio dello spray.");
        if(s.identity.Scoped)
         throw new InvalidOperationException("Per questa conversione registra senza zoom/ADS.");
+       if(expectedAmc!=null)AmcExecutionCheck.ValidateIdentity(expectedAmc,s.identity);
        pressTime=s.observed_ms;samples.Add(baseline);samples.Add(s);identity(s.identity);break;
       }
       baseline=s;stableReads++;
@@ -92,7 +97,7 @@ namespace RecoilProbe {
    result.MetadataPath=Path.Combine(directory,name+".json");
    RecordingIO.WriteCsv(result.CsvPath,samples);
    Dictionary<string,object> meta=new Dictionary<string,object>();
-   meta["tool"]="CS2 Recoil Probe 0.2.3";meta["source_commit"]=Layout.SourceCommit;
+   meta["tool"]="CS2 Recoil Probe 0.2.4";meta["source_commit"]=Layout.SourceCommit;
    meta["target_build"]=Layout.TargetBuild;meta["observed_build"]=game.Build;
    meta["client_file_version"]=game.ClientVersion;meta["engine_file_version"]=game.EngineVersion;
    meta["weapon_detected"]=info.WeaponName;meta["weapon_definition_index"]=info.ItemDefinitionIndex;
@@ -108,8 +113,19 @@ namespace RecoilProbe {
    meta["session_checks"]="-insecure, not Valve DS, same pawn, foreground, alive, sign-on full";
    meta["local_only_guaranteed_by_checks"]=false;meta["angle_fields_are_raw_base_values"]=true;
    meta["instantaneous_bullet_recoil_reconstruction_verified"]=false;
+   meta["capture_mode"]=expectedAmc==null?"STATIONARY_REFERENCE":"AMC_EXECUTION_TEST";
    meta["amc_generated"]=false;meta["conversion_assumptions"]="m_pitch=m_yaw=0.022; recoil_scale=2; 64Hz ticks.";
    meta["result"]=result;
+   if(expectedAmc!=null) {
+    try {
+     if(settingsChanged||!(reason=="Rilascio del pulsante sinistro"||reason=="Interruzione F8"))
+      throw new InvalidOperationException("Prova interrotta: dati grezzi conservati.");
+     ExecutionCheckResult execution=AmcExecutionCheck.Analyze(samples,expectedAmc,info.Sensitivity,reason);
+     result.ExecutionReportPath=Path.Combine(directory,name+".execution.json");
+     RecordingIO.WriteJson(result.ExecutionReportPath,execution);
+     meta["amc_execution_result"]=execution;
+    } catch(Exception ex){result.ExecutionError=ex.Message;}
+   }
    if(autoAmc) {
     try {
      if(settingsChanged || !(reason=="Rilascio del pulsante sinistro" || reason=="Interruzione F8"))

@@ -14,7 +14,7 @@ namespace RecoilProbe {
   public string AmcPath, ReportPath, Weapon, SourcePath;
   public int Shots, MoveCommands, OriginalMoveCommands, AntiRepeatMs = 30000, TotalX, TotalY;
   public int SmoothingStepMs = 10;
-  public string SourceKind = "CSV/JSON";
+  public string SourceKind = "CSV/JSON", ReleaseTimingSource = "Native last-shot time plus median shot cycle";
   public double SourceSensitivity, TargetSensitivity, ActiveDurationMs, MaximumTimingResidualMs;
   public bool WeaponAndSensitivityAutomaticallyRead, InstantaneousRecoilVerified = false;
   public string Method = "Recorded shot-time base-angle anchors; moderate linear steps around 10ms, retaining original midpoint and shot anchors.";
@@ -46,6 +46,10 @@ namespace RecoilProbe {
   }
   internal static List<RecoilPoint> Points(RecordingData data) {
    if(data==null || data.Samples.Count<2)throw new InvalidOperationException("Registrazione insufficiente.");
+   object captureMode;
+   if(data.Metadata.TryGetValue("capture_mode",out captureMode)&&
+    System.Convert.ToString(captureMode,CultureInfo.InvariantCulture)=="AMC_EXECUTION_TEST")
+    throw new InvalidOperationException("Questa e' una prova di esecuzione AMC: non convertirla in un nuovo pattern recoil.");
    Dictionary<string,Group> groups=new Dictionary<string,Group>();
    uint hash=0; bool sawPress=false; int previousPositive=0;
    Vector eye=null;
@@ -177,6 +181,13 @@ namespace RecoilProbe {
     throw new InvalidOperationException("Tempi osservati e tick troppo diversi. Ripeti la registrazione.");
    gaps.Sort();double cycle=gaps[gaps.Count/2];
    int end=Round(firstTime+(points[points.Count-1].Tick-firstTick)*15.625+cycle);
+   Sample finalSample=data.Samples[data.Samples.Count-1];
+   if(!finalSample.left_down&&finalSample.observed_ms>=0) {
+    int release=Round(finalSample.observed_ms);
+    if(release<lastTime||release>20000)
+     throw new InvalidOperationException("Tempo di rilascio non compatibile con la registrazione.");
+    end=release;result.ReleaseTimingSource="Observed left-button release";
+   }
    Delay(commands,end-lastTime);commands.Add("LeftUp 1");Delay(commands,30000);
    result.TotalX=lastX;result.TotalY=lastY;result.ActiveDurationMs=end;
    return Save(result,commands,output);
@@ -187,7 +198,7 @@ namespace RecoilProbe {
     throw new InvalidOperationException("Sensibilita' destinazione non valida.");
    AmcResult result=new AmcResult {Weapon=data.WeaponName,SourceKind="AMC",
     SourcePath=data.SourcePath,SourceSensitivity=data.Sensitivity,TargetSensitivity=targetSensitivity,
-    OriginalMoveCommands=data.MoveCommands,
+    OriginalMoveCommands=data.MoveCommands,ReleaseTimingSource="Original AMC LeftUp time",
     Method="Existing AMC cumulative positions resampled around 10ms; every original timed anchor retained. First movement kept at its original time.",
     Assumptions="Existing AMC raw mouse counts; sensitivity from its header; no new game-memory verification. Cumulative rounding avoids drift."};
    List<string> commands=new List<string>();commands.Add("LeftDown 1");

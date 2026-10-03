@@ -304,11 +304,115 @@ internal static class CoreChecks {
   } finally {foreach(IntPtr allocation in allocations)Marshal.FreeHGlobal(allocation);}
  }
 
+ private static List<Sample> ExecutionSamples(AmcInput expected,double lag,double duration,
+  double gainX,double gainY,double end,bool quantize) {
+  List<Sample> samples=new List<Sample>();int index=0,x=0,y=0;
+  for(double at= -2;at<=end;at+=2) {
+   while(index<expected.Anchors.Count&&lag+duration*expected.Anchors[index].Time<=at) {
+    x=expected.Anchors[index].X;y=expected.Anchors[index].Y;index++;
+   }
+   double actualX=x*gainX,actualY=y*gainY;
+   if(quantize){actualX=Math.Round(actualX);actualY=Math.Round(actualY);}
+   double yaw=179.5-actualX*1.25*0.022;
+   if(yaw>180)yaw-=360;if(yaw< -180)yaw+=360;
+   samples.Add(new Sample {observed_ms=at,left_down=at>=0&&at<end,
+    eye_angle=new Vector {pitch=(float)(10+actualY*1.25*0.022),yaw=(float)yaw,roll=0}});
+  }
+  return samples;
+ }
+ private static void ExecutionChecks(string output) {
+  AmcInput macro=new AmcInput {SourcePath="AK47_EXAMPLE.amc",WeaponName="AK47",
+   Sensitivity=1.25,ReleaseTime=2500,TailMs=30000,MoveCommands=9};
+  int[][] values=new int[][] {
+   new int[] {50,-4,8},new int[] {120,-22,45},new int[] {270,15,90},
+   new int[] {410,80,130},new int[] {635,-35,170},new int[] {820,110,225},
+   new int[] {1135,-140,285},new int[] {1680,45,355},new int[] {2100,-130,363}
+  };
+  foreach(int[] p in values)macro.Anchors.Add(new MouseAnchor {Time=p[0],X=p[1],Y=p[2]});
+  List<Sample> samples=ExecutionSamples(macro,18,1.08,0.92,1.12,2450,true);
+  ExecutionCheckResult result=AmcExecutionCheck.Analyze(samples,macro,1.25,"synthetic macro execution");
+  Check(Math.Abs(result.LagMs-18)<=2.1&&Math.Abs(result.DurationFactor-1.08)<=0.0021,
+   "AMC execution comparison recovers known delay and duration from quantized, 2ms samples");
+  Check(Math.Abs(result.HorizontalGain-0.92)<0.003&&Math.Abs(result.VerticalGain-1.12)<0.003,
+   "Independent horizontal and vertical gains are measured through yaw wraparound");
+  Check(result.CompleteTimelineObserved&&!result.SearchBoundaryReached&&result.RootMeanSquareErrorCounts<1,
+   "Complete execution has a small measured residual under the declared input-angle assumptions");
+  Check(!result.InstantaneousBulletRecoilVerified&&!result.RawMouseCountsDirectlyRead,
+   "Execution fit never claims direct raw-input or bullet-direction verification");
+  Check(result.ExpectedAnchors.Count==9&&result.ExpectedReleaseMs==2500&&result.AntiRepeatMs==30000&&
+   result.Trace.Count>100&&result.SamplesCompared==samples.Count&&result.MedianObservationGapMs==2,
+   "Execution report retains the selected AMC timeline and measured comparison trace");
+  RecordingIO.WriteJson(Path.Combine(output,"EXECUTION_SYNTHETIC.execution.json"),result);
+  List<Sample> exact=ExecutionSamples(macro,0,1,1,1,2400,false);
+  ExecutionCheckResult identity=AmcExecutionCheck.Analyze(exact,macro,1.25,"identity execution");
+  Check(Math.Abs(identity.LagMs)<=2&&Math.Abs(identity.DurationFactor-1)<=0.002&&
+   Math.Abs(identity.HorizontalGain-1)<0.0001&&Math.Abs(identity.VerticalGain-1)<0.0001,
+   "Matching AMC execution does not invent gain or a changed duration");
+  List<Sample> stopped=ExecutionSamples(macro,18,1.08,0.92,1.12,1900,true);
+  Check(!AmcExecutionCheck.Analyze(stopped,macro,1.25,"early release").CompleteTimelineObserved,
+   "Early release is reported as an incomplete comparison");
+  List<Sample> idle=ExecutionSamples(macro,18,1.08,0,0,2450,false);
+  Reject(delegate{AmcExecutionCheck.Analyze(idle,macro,1.25,"no macro");},
+   "No recorded movement cannot be fitted as a successful AMC execution");
+  List<Sample> noBaseline=ExecutionSamples(macro,18,1.08,0.92,1.12,2450,true);
+  noBaseline.RemoveAt(0);
+  Reject(delegate{AmcExecutionCheck.Analyze(noBaseline,macro,1.25,"no baseline");},
+   "Execution measurement requires a baseline before the click");
+  List<Sample> unsorted=ExecutionSamples(macro,18,1.08,0.92,1.12,2450,true);
+  unsorted[30].observed_ms= -3;
+  Reject(delegate{AmcExecutionCheck.Analyze(unsorted,macro,1.25,"time reversal");},
+   "Unordered execution samples are rejected");
+  GameIdentity equipped=new GameIdentity {WeaponName="AK47",Sensitivity=1.25F};
+  AmcExecutionCheck.ValidateIdentity(macro,equipped);
+  equipped.Sensitivity=2.5F;
+  Reject(delegate{AmcExecutionCheck.ValidateIdentity(macro,equipped);},
+   "Execution test requires the selected AMC sensitivity in the game");
+  equipped.Sensitivity=1.25F;equipped.WeaponName="M4A4";
+  Reject(delegate{AmcExecutionCheck.ValidateIdentity(macro,equipped);},
+   "Execution test requires the selected AMC weapon");
+  equipped.WeaponName="AK47";equipped.Scoped=true;
+  Reject(delegate{AmcExecutionCheck.ValidateIdentity(macro,equipped);},
+   "Scoped execution cannot be compared against an unscoped AMC");
+  Environment.SetEnvironmentVariable("CS2_PROBE_TEST_MODE","1");
+  using(MainForm form=new MainForm()) {
+   System.Reflection.BindingFlags flags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
+   System.Reflection.MethodInfo mode=typeof(MainForm).GetMethod("SetExecutionTest",flags);
+   mode.Invoke(form,new object[] {macro});
+   Check(((Button)typeof(MainForm).GetField("record",flags).GetValue(form)).Text=="PROVA AMC · F8"&&
+    !((CheckBox)typeof(MainForm).GetField("autoAmc",flags).GetValue(form)).Enabled,
+    "Test mode identifies F8 as an AMC test and disables automatic recoil export");
+   mode.Invoke(form,new object[] {null});
+   Check(((CheckBox)typeof(MainForm).GetField("autoAmc",flags).GetValue(form)).Enabled&&
+    ((Button)typeof(MainForm).GetField("record",flags).GetValue(form)).Text=="ARMA / FERMA · F8",
+    "Leaving AMC test restores the regular recorder controls");
+  }
+ }
+ private static void ObservedReleaseChecks(RecordingData legacy,string output) {
+  RecordingData released=RecordingData.FromSamples(new List<Sample>(legacy.Samples),
+   new Dictionary<string,object>(legacy.Metadata));
+  Sample last=legacy.Samples[legacy.Samples.Count-1];
+  released.Samples.Add(new Sample {
+   observed_ms=3282.965,left_down=false,shots_fired=last.shots_fired,
+   predictable_tick=last.predictable_tick,predictable_tick_fraction=last.predictable_tick_fraction,
+   predictable_angle=last.predictable_angle,predictable_velocity=last.predictable_velocity,
+   unpredictable_angle=last.unpredictable_angle,eye_angle=last.eye_angle,weapon_hash=last.weapon_hash
+  });
+  AmcResult result=AmcConverter.Convert(released,Path.Combine(output,"OBSERVED_RELEASE.amc"),1.25);
+  Timeline timeline=ParseAmc(result.AmcPath);
+  Check(timeline.Release==3283&&result.ReleaseTimingSource=="Observed left-button release"&&
+   timeline.X== -130&&timeline.Y==363&&timeline.Tail==30000,
+   "CSV conversion retains actual click release without changing geometry or the anti-repeat tail");
+  released.Metadata["capture_mode"]="AMC_EXECUTION_TEST";
+  Reject(delegate{AmcConverter.Points(released);},
+   "AMC execution recordings cannot be silently converted into a reference recoil pattern");
+ }
+
  [STAThread] private static int Main(string[] args) {
   try{
    if(args.Length!=2)throw new Exception("Usage: CoreChecks.exe FIXTURE_DIRECTORY OUTPUT_DIRECTORY");
    string fixtures=Path.GetFullPath(args[0]),output=Path.GetFullPath(args[1]);
    Directory.CreateDirectory(output);
+   Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
    StartupDiagnostics(output);
    string csv=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.csv"));
    string json=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.json"));
@@ -361,6 +465,8 @@ internal static class CoreChecks {
    Check(directions,"Smoothing retains every interval direction including horizontal and vertical reversals");
    Check(linear,"Inserted AK steps stay within rounding tolerance of the original linear path");
    AmcSmoothingChecks(output);
+   ExecutionChecks(output);
+   ObservedReleaseChecks(legacy,output);
    ProvidedAmcChecks(fixtures,output);
    Check(!result.InstantaneousRecoilVerified&&File.Exists(result.ReportPath),"Report marks interpolation unverified");
    Reject(delegate{AmcConverter.Convert(legacy,result.AmcPath,1.25);},"Existing AMC is never overwritten");
@@ -402,7 +508,7 @@ internal static class CoreChecks {
    string roundtrip=Path.Combine(output,"AUTOMATIC.csv");RecordingIO.WriteCsv(roundtrip,automatic.Samples);
    RecordingIO.WriteJson(Path.ChangeExtension(roundtrip,".json"),automatic.Metadata);
    RecordingData read=RecordingIO.Load(roundtrip);
-   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2.3 CSV/JSON identity roundtrip");
+   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2.4 CSV/JSON identity roundtrip");
    Check(File.ReadAllLines(roundtrip)[0].Split(',').Length==34,"New CSV includes all seven identity/settings fields");
    automatic.Metadata["weapon_definition_index"]=16;
    Reject(delegate{automatic.ResolveMetadata();},"Disagreement between CSV and JSON weapon rejected");
@@ -427,7 +533,6 @@ internal static class CoreChecks {
     Check(RecordingIO.Parse(csv,json).Sensitivity==1.25,"Import is culture independent in Italian Windows");
    }finally{Thread.CurrentThread.CurrentCulture=saved;}
    Environment.SetEnvironmentVariable("CS2_PROBE_TEST_MODE","1");
-   Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
    Preview(new ConverterForm(),Path.Combine(output,"UI_CONVERTER.png"));
    Preview(new ConverterForm(),Path.Combine(output,"UI_CONVERTER_AMC.png"),
     Path.Combine(fixtures,"AK47_ORIGINAL_50MS_V022.amc"));

@@ -1,6 +1,13 @@
-CS2 RECOIL READER & RECORDER V0.2.3
+TEST AMC — V0.2.4
+Premi TEST AMC... e seleziona lo stesso AMC che esegui in Bloody.
+In CS2: arma e sensibilita' dell'AMC, F8, poi spray completo con macro attiva e mouse fermo.
+Rilascia alla fine. Trovi il file .execution.json in Registrazioni; contiene confronto tempi/ampiezza.
+ESCI DAL TEST ripristina la registrazione normale. La prova non genera un nuovo pattern.
+La precisione dei proiettili non e' ancora verificata. Leggi ANALISI_AK47.md.
 
-Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.3.exe.
+CS2 RECOIL READER & RECORDER V0.2.4
+
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.4.exe.
 Arma equipaggiata e sensibilita' vengono lette automaticamente dal gioco.
 
 REGISTRARE

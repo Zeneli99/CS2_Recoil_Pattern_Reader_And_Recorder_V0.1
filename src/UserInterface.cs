@@ -41,7 +41,8 @@ namespace RecoilProbe {
  internal sealed class MainForm : Form {
   private TextBox weapon,sensitivity,folder,log;
   private Label detected;
-  private Button record,open,convert,choose,report;
+  private Button record,open,convert,choose,report,check;
+  private AmcInput executionAmc;
   private CheckBox autoAmc;
   private Recorder recorder;
   private Thread worker;
@@ -49,8 +50,8 @@ namespace RecoilProbe {
   private System.Windows.Forms.Timer monitor;
   private const int HotkeyId=8118;
   internal MainForm() {
-   Ui.Style(this,"CS2 RECOIL RECORDER · V0.2.3");Ui.Title(this,"CS2 RECOIL RECORDER");
-   Ui.Label(this,"V0.2.3",485,25,45,24);
+   Ui.Style(this,"CS2 RECOIL RECORDER · V0.2.4");Ui.Title(this,"CS2 RECOIL RECORDER");
+   Ui.Label(this,"V0.2.4",485,25,45,24);
    Button page=Ui.Button(this,"RECORDER",20,54,145,29);page.Enabled=false;
    convert=Ui.Button(this,"CONVERTER",180,54,145,29);
    convert.Click+=delegate{using(ConverterForm form=new ConverterForm())form.ShowDialog(this);};
@@ -70,9 +71,20 @@ namespace RecoilProbe {
      if(dialog.ShowDialog(this)==DialogResult.OK)folder.Text=dialog.SelectedPath;
     }
    };
-   autoAmc=new CheckBox {Text="Genera AMC automaticamente dopo lo spray",Checked=true,
-    Location=new Point(20,214),Size=new Size(500,23),ForeColor=Color.Gainsboro};
+   autoAmc=new CheckBox {Text="Genera AMC dopo lo spray",Checked=true,
+    Location=new Point(20,214),Size=new Size(250,23),ForeColor=Color.Gainsboro};
    Controls.Add(autoAmc);
+   check=Ui.Button(this,"TEST AMC...",280,213,240,25);
+   check.Click+=delegate {
+    if(executionAmc!=null) {SetExecutionTest(null);return;}
+    using(OpenFileDialog dialog=new OpenFileDialog()) {
+     dialog.Filter="Macro da verificare (*.amc)|*.amc";
+     if(dialog.ShowDialog(this)==DialogResult.OK) {
+      try{SetExecutionTest(AmcInput.Load(dialog.FileName));}
+      catch(Exception ex){Status(ex.Message);}
+     }
+    }
+   };
    record=Ui.Button(this,"ARMA / FERMA · F8",20,243,245,35);record.Click+=delegate{Toggle();};
    open=Ui.Button(this,"Apri registrazioni",280,243,240,35);
    open.Click+=delegate{
@@ -126,27 +138,36 @@ namespace RecoilProbe {
   private void Toggle() {
    if(running){recorder.StopRequested=true;record.Enabled=false;return;}
    string path;try{path=Path.GetFullPath(folder.Text);}catch(Exception ex){Status(ex.Message);return;}
-   recorder=new Recorder(path,autoAmc.Checked,Status,delegate(GameIdentity info){Ui.Post(this,delegate{SetIdentity(info);});});
-   running=true;folder.Enabled=false;autoAmc.Enabled=false;convert.Enabled=false;choose.Enabled=false;
+   recorder=new Recorder(path,autoAmc.Checked,Status,delegate(GameIdentity info){Ui.Post(this,delegate{SetIdentity(info);});},executionAmc);
+   running=true;folder.Enabled=false;autoAmc.Enabled=false;convert.Enabled=false;choose.Enabled=false;check.Enabled=false;
    record.Text="FERMA · F8";
    worker=new Thread(delegate(){
     CaptureResult result=null;string error=null;
     try{result=recorder.Run();}catch(Exception ex){error=ex.Message;Diagnostics.Record(ex);}
     Ui.Post(this,delegate{
-     running=false;record.Enabled=true;record.Text="ARMA / FERMA · F8";folder.Enabled=true;
-     autoAmc.Enabled=true;convert.Enabled=true;choose.Enabled=true;
+     running=false;record.Enabled=true;record.Text=executionAmc==null?"ARMA / FERMA · F8":"PROVA AMC · F8";folder.Enabled=true;
+     autoAmc.Enabled=executionAmc==null;convert.Enabled=true;choose.Enabled=true;check.Enabled=true;
      if(error!=null)log.Text=error+"\r\nPremi REPORT per aprire Diagnostica_CS2.txt.";
      else if(result==null)log.Text="Registrazione annullata prima del primo colpo.";
      else {
       log.Text=result.Shots+" colpi · "+result.Samples+" campioni · gap max "+
        result.MaxGapMs.ToString("F2",CultureInfo.CurrentCulture)+" ms\r\n"+
-       (result.AmcPath!=null?"AMC salvato: "+Path.GetFileName(result.AmcPath):
-        result.AmcError??"CSV + JSON salvati.");
+       (result.ExecutionReportPath!=null?"Test salvato: "+Path.GetFileName(result.ExecutionReportPath):
+        result.ExecutionError??(result.AmcPath!=null?"AMC salvato: "+Path.GetFileName(result.AmcPath):
+        result.AmcError??"CSV + JSON salvati."));
      }
      if(closing)Close();
     });
    });
    worker.IsBackground=true;worker.Name="CS2 read-only recorder";worker.Start();
+  }
+  private void SetExecutionTest(AmcInput selected) {
+   executionAmc=selected;autoAmc.Enabled=selected==null;
+   check.Text=selected==null?"TEST AMC...":"ESCI DAL TEST";
+   record.Text=selected==null?"ARMA / FERMA · F8":"PROVA AMC · F8";
+   log.Text=selected==null?"F8, torna al gioco, attendi un secondo e spara senza muovere il mouse.":
+    selected.WeaponName+" · sens "+selected.Sensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+
+    " · "+Path.GetFileName(selected.SourcePath)+"\r\nF8 nel gioco, poi esegui questa macro in Bloody con il mouse fermo.";
   }
   private void Status(string message){Ui.Post(this,delegate{log.Text=message;});}
   protected override void Dispose(bool disposing) {
@@ -162,7 +183,7 @@ namespace RecoilProbe {
   private AmcInput amc;
   private bool busy;
   internal ConverterForm() {
-   Ui.Style(this,"CS2 AMC CONVERTER · V0.2.3");Ui.Title(this,"AMC CONVERTER");
+   Ui.Style(this,"CS2 AMC CONVERTER · V0.2.4");Ui.Title(this,"AMC CONVERTER");
    Ui.Label(this,"Apri AMC / ZIP / CSV / JSON · oppure trascina un file.",20,55,500,24);
    source=Ui.Text(this,"Nessuna registrazione caricata",20,87,375,true);
    load=Ui.Button(this,"APRI FILE",410,85,110,29);load.Click+=delegate{Choose();};
