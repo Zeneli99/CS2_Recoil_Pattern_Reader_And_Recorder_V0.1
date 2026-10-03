@@ -12,10 +12,12 @@ namespace RecoilProbe {
  }
  internal sealed class AmcResult {
   public string AmcPath, ReportPath, Weapon, SourcePath;
-  public int Shots, MoveCommands, AntiRepeatMs = 30000, TotalX, TotalY;
+  public int Shots, MoveCommands, OriginalMoveCommands, AntiRepeatMs = 30000, TotalX, TotalY;
+  public int SmoothingStepMs = 10;
+  public string SourceKind = "CSV/JSON";
   public double SourceSensitivity, TargetSensitivity, ActiveDurationMs, MaximumTimingResidualMs;
   public bool WeaponAndSensitivityAutomaticallyRead, InstantaneousRecoilVerified = false;
-  public string Method = "Recorded shot-time base-angle anchors; two estimated linear steps per interval.";
+  public string Method = "Recorded shot-time base-angle anchors; moderate linear steps around 10ms, retaining original midpoint and shot anchors.";
   public string Assumptions = "m_pitch=0.022; m_yaw=0.022; weapon_recoil_scale=2.0; game_tick_hz=64; MoveR uses raw mouse counts.";
  }
  internal static class AmcConverter {
@@ -120,6 +122,24 @@ namespace RecoilProbe {
     if(result.MoveCommands>10000)throw new InvalidOperationException("Troppi comandi AMC.");
    }
   }
+  internal const int SmoothStepMs = 10;
+  private static void Segment(List<string> commands,int fromTime,int toTime,
+   double fromX,double fromY,double toX,double toY,
+   ref int lastTime,ref int lastX,ref int lastY,AmcResult result) {
+   if(toTime<fromTime)throw new InvalidOperationException("Timeline AMC non valida.");
+   int span=toTime-fromTime;
+   int parts=Math.Max(1,(span+SmoothStepMs-1)/SmoothStepMs);
+   for(int part=1;part<=parts;part++) {
+    double f=part/(double)parts;
+    int time=fromTime+Round(span*f);
+    int x=Round(part==parts?toX:fromX+(toX-fromX)*f);
+    int y=Round(part==parts?toY:fromY+(toY-fromY)*f);
+    int dx=x-lastX,dy=y-lastY;
+    if(dx==0&&dy==0)continue;
+    Delay(commands,time-lastTime);Move(commands,dx,dy,result);
+    lastTime=time;lastX=x;lastY=y;
+   }
+  }
   internal static AmcResult Convert(RecordingData data,string output,double targetSensitivity) {
    if(!IdentityReader.ValidSensitivity(targetSensitivity))
     throw new InvalidOperationException("Sensibilita' destinazione non valida.");
@@ -139,16 +159,18 @@ namespace RecoilProbe {
      Math.Abs(nativeTime-points[i].ObservedMs));
     if(i==0)continue;
     gaps.Add((points[i].Tick-points[i-1].Tick)*15.625);
-    for(int step=1;step<=2;step++) {
-     double f=step/2.0;
-     double tick=points[i-1].Tick+(points[i].Tick-points[i-1].Tick)*f;
-     double pitch=points[i-1].Pitch+(points[i].Pitch-points[i-1].Pitch)*f;
-     double yaw=points[i-1].Yaw+(points[i].Yaw-points[i-1].Yaw)*f;
-     int time=Round(firstTime+(tick-firstTick)*15.625),x=Round(yaw*scale),y=Round(-pitch*scale);
-     int dx=x-lastX,dy=y-lastY;
-     if(dx==0 && dy==0)continue;
-     Delay(commands,time-lastTime);Move(commands,dx,dy,result);
-     lastTime=time;lastX=x;lastY=y;
+    // Keep both old anchor boundaries, subdividing each half independently.
+    double tickGap=points[i].Tick-points[i-1].Tick;
+    for(int half=0;half<2;half++) {
+     double f0=half/2.0,f1=(half+1)/2.0;
+     int from=Round(firstTime+(points[i-1].Tick+tickGap*f0-firstTick)*15.625);
+     int to=Round(firstTime+(points[i-1].Tick+tickGap*f1-firstTick)*15.625);
+     double fromPitch=points[i-1].Pitch+(points[i].Pitch-points[i-1].Pitch)*f0;
+     double toPitch=points[i-1].Pitch+(points[i].Pitch-points[i-1].Pitch)*f1;
+     double fromYaw=points[i-1].Yaw+(points[i].Yaw-points[i-1].Yaw)*f0;
+     double toYaw=points[i-1].Yaw+(points[i].Yaw-points[i-1].Yaw)*f1;
+     Segment(commands,from,to,fromYaw*scale,-fromPitch*scale,toYaw*scale,-toPitch*scale,
+      ref lastTime,ref lastX,ref lastY,result);
     }
    }
    if(result.MaximumTimingResidualMs>30)
@@ -157,6 +179,34 @@ namespace RecoilProbe {
    int end=Round(firstTime+(points[points.Count-1].Tick-firstTick)*15.625+cycle);
    Delay(commands,end-lastTime);commands.Add("LeftUp 1");Delay(commands,30000);
    result.TotalX=lastX;result.TotalY=lastY;result.ActiveDurationMs=end;
+   return Save(result,commands,output);
+  }
+  internal static AmcResult Smooth(AmcInput data,string output,double targetSensitivity) {
+   if(data==null||data.Anchors.Count==0)throw new InvalidOperationException("AMC insufficiente.");
+   if(!IdentityReader.ValidSensitivity(targetSensitivity))
+    throw new InvalidOperationException("Sensibilita' destinazione non valida.");
+   AmcResult result=new AmcResult {Weapon=data.WeaponName,SourceKind="AMC",
+    SourcePath=data.SourcePath,SourceSensitivity=data.Sensitivity,TargetSensitivity=targetSensitivity,
+    OriginalMoveCommands=data.MoveCommands,
+    Method="Existing AMC cumulative positions resampled around 10ms; every original timed anchor retained. First movement kept at its original time.",
+    Assumptions="Existing AMC raw mouse counts; sensitivity from its header; no new game-memory verification. Cumulative rounding avoids drift."};
+   List<string> commands=new List<string>();commands.Add("LeftDown 1");
+   double ratio=data.Sensitivity/targetSensitivity;
+   int lastTime=0,lastX=0,lastY=0;
+   MouseAnchor first=data.Anchors[0];
+   // An AMC has no recorded zero-recoil timestamp: do not guess its initial ramp.
+   Segment(commands,first.Time,first.Time,first.X*ratio,first.Y*ratio,first.X*ratio,first.Y*ratio,
+    ref lastTime,ref lastX,ref lastY,result);
+   for(int i=1;i<data.Anchors.Count;i++) {
+    MouseAnchor a=data.Anchors[i-1],b=data.Anchors[i];
+    Segment(commands,a.Time,b.Time,a.X*ratio,a.Y*ratio,b.X*ratio,b.Y*ratio,
+     ref lastTime,ref lastX,ref lastY,result);
+   }
+   Delay(commands,data.ReleaseTime-lastTime);commands.Add("LeftUp 1");Delay(commands,data.TailMs);
+   result.TotalX=lastX;result.TotalY=lastY;result.ActiveDurationMs=data.ReleaseTime;
+   return Save(result,commands,output);
+  }
+  private static AmcResult Save(AmcResult result,List<string> commands,string output) {
    string path=Path.GetFullPath(output);
    if(!String.Equals(Path.GetExtension(path),".amc",StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException("L'output deve avere estensione .amc.");
@@ -172,11 +222,11 @@ namespace RecoilProbe {
     using(XmlWriter writer=XmlWriter.Create(bytes,settings)) {
      writer.WriteStartDocument();writer.WriteStartElement("Root");writer.WriteStartElement("DefaultMacro");
      writer.WriteElementString("Major","");
-     writer.WriteElementString("Description",data.WeaponName+" · SENS "+
-      targetSensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+" · PROVA NON VALIDATA IN GIOCO");
+     writer.WriteElementString("Description",result.Weapon+" · SENS "+
+      result.TargetSensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+" · SMOOTH 10 ms · PROVA NON VALIDATA IN GIOCO");
      writer.WriteElementString("Comment",result.Method+" "+result.Assumptions+
-      " Source: "+(data.SourcePath==null?"recording":Path.GetFileName(data.SourcePath))+
-      ". Weapon/sensitivity automatically read: "+data.AutomaticIdentity+
+      " Source: "+(result.SourcePath==null?"recording":Path.GetFileName(result.SourcePath))+
+      ". Source kind: "+result.SourceKind+". Weapon/sensitivity automatically read: "+result.WeaponAndSensitivityAutomaticallyRead+
       ". 30000ms tail delays repetition of the active invocation; a new press can start a new run.");
      writer.WriteStartElement("GUIOption");writer.WriteElementString("RepeatType","1");writer.WriteEndElement();
      writer.WriteStartElement("KeyUp");writer.WriteElementString("Syntax","LeftUp 1\r\n");writer.WriteEndElement();
@@ -193,6 +243,10 @@ namespace RecoilProbe {
     using(StreamWriter writer=new StreamWriter(stream,new UTF8Encoding(false)))writer.Write(report);
    } catch { if(File.Exists(path))File.Delete(path);throw; }
    return result;
+  }
+  internal static string SuggestedFileName(AmcInput data,double sensitivity) {
+   return data.WeaponName+"_SMOOTH_SENS_"+sensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+"_"+
+    DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff",CultureInfo.InvariantCulture)+".amc";
   }
   internal static string SuggestedFileName(RecordingData data,double sensitivity) {
    string name=System.Text.RegularExpressions.Regex.Replace(data.WeaponName,@"[^A-Za-z0-9_-]","_");

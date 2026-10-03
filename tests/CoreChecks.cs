@@ -26,8 +26,10 @@ internal static class CoreChecks {
   internal int Time,X,Y,Release=-1,Tail,Commands;internal bool Left;
   internal List<int[]> Moves=new List<int[]>();
  }
- private static Timeline ParseAmc(string path) {
-  byte[] bytes=File.ReadAllBytes(path);Check(bytes[0]==255&&bytes[1]==254,"AMC has UTF-16LE BOM");
+ private static Timeline ParseAmc(string path) {return ParseAmc(path,true);}
+ private static Timeline ParseAmc(string path,bool checkOutputEncoding) {
+  byte[] bytes=File.ReadAllBytes(path);
+  if(checkOutputEncoding)Check(bytes[0]==255&&bytes[1]==254,"AMC has UTF-16LE BOM");
   XmlDocument xml=new XmlDocument();xml.Load(path);
   Check(xml.SelectSingleNode("//GUIOption/RepeatType").InnerText=="1","Hold repeat type retained");
   Check(xml.SelectSingleNode("//KeyUp/Syntax").InnerText.Trim()=="LeftUp 1","Release handler lifts left button");
@@ -50,9 +52,21 @@ internal static class CoreChecks {
   }
   Check(!t.Left&&t.Tail==30000,"Fixed anti-repeat tail is 30000ms after left-up");return t;
  }
- private static void Preview(Form form,string output) {
+ private static void Preview(Form form,string output,string amcPath=null) {
   using(form){
-   form.Show();Application.DoEvents();form.Refresh();Application.DoEvents();
+   form.Show();Application.DoEvents();
+   if(amcPath!=null) {
+    System.Reflection.BindingFlags flags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+    typeof(ConverterForm).GetMethod("LoadRecording",flags).Invoke(form,new object[] {amcPath});
+    Stopwatch loading=Stopwatch.StartNew();
+    while((bool)typeof(ConverterForm).GetField("busy",flags).GetValue(form)&&loading.ElapsedMilliseconds<3000) {
+     Application.DoEvents();Thread.Sleep(10);
+    }
+    Check(typeof(ConverterForm).GetField("amc",flags).GetValue(form)!=null&&
+     ((Button)typeof(ConverterForm).GetField("convert",flags).GetValue(form)).Enabled,
+     "Converter opens an AMC asynchronously and enables export without a running game");
+   }
+   form.Refresh();Application.DoEvents();
    foreach(Control child in form.Controls)
     if(child.Right>540||child.Bottom>360||child.Left<0||child.Top<0)
      throw new Exception("Control outside compact form");
@@ -60,6 +74,110 @@ internal static class CoreChecks {
     form.DrawToBitmap(bitmap,new Rectangle(0,0,form.Width,form.Height));bitmap.Save(output);
    }
   }
+ }
+ private static int[] Position(Timeline t,int at) {
+  int x=0,y=0;foreach(int[] move in t.Moves)if(move[0]<=at){x=move[1];y=move[2];}
+  return new int[] {x,y};
+ }
+ private static void ProvidedAmcChecks(string fixtures,string output) {
+  string source=Path.Combine(fixtures,"AK47_ORIGINAL_50MS_V022.amc");
+  AmcInput input=AmcInput.Load(source);Timeline original=ParseAmc(source,false);
+  AmcResult result=AmcConverter.Smooth(input,Path.Combine(output,"AK47_SENS_1.250_SMOOTH_10MS.amc"),1.25);
+  Timeline smooth=ParseAmc(result.AmcPath);
+  Check(original.Commands==58&&smooth.Commands==286,
+   "Provided AK AMC converts 58 original moves into 286 moderate steps");
+  bool anchors=true,timing=true;int maxDelta=0,px=0,py=0;
+  foreach(int[] anchor in original.Moves) {
+   int[] p=Position(smooth,anchor[0]);anchors&=p[0]==anchor[1]&&p[1]==anchor[2];
+  }
+  for(int i=0;i<smooth.Moves.Count;i++) {
+   int[] move=smooth.Moves[i];maxDelta=Math.Max(maxDelta,Math.Max(Math.Abs(move[1]-px),Math.Abs(move[2]-py)));
+   if(i>0)timing&=move[0]-smooth.Moves[i-1][0]>=10;
+   px=move[1];py=move[2];
+  }
+  Check(anchors,"All 58 provided AMC anchors retain their exact position and timestamp");
+  Check(timing&&maxDelta<=9,"Provided AMC uses at least 10ms gaps and at most 9-count jumps");
+  Check(smooth.Moves[0][0]==52&&smooth.Moves[smooth.Moves.Count-1][0]==2902&&
+   smooth.Release==3002&&smooth.X== -130&&smooth.Y==363&&smooth.Tail==30000,
+   "Provided AMC preserves first move, last anchor, release, total X/Y and anti-repeat");
+ }
+ private static string SyntheticAmc() {
+  List<string> commands=new List<string> {"LeftDown 1","Delay 52 ms","MoveR -2 4",
+   "Delay 50 ms","MoveR -2 3","Delay 50 ms","MoveR 43 -17",
+   "Delay 50 ms","MoveR -43 0","Delay 13 ms","MoveR -1 1",
+   "Delay 29 ms","MoveR 12 -1","Delay 50 ms","MoveR -12 1",
+   "Delay 100 ms","LeftUp 1"};
+  for(int i=0;i<30;i++)commands.Add("Delay 999 ms");commands.Add("Delay 30 ms");
+  return "<?xml version=\"1.0\" encoding=\"UTF-16\"?><Root><DefaultMacro>"+
+   "<Major/><Description>AK47 · SENS 1.250 · PROVA NON VALIDATA IN GIOCO</Description>"+
+   "<Comment>Synthetic rounding, reversal and timing fixture.</Comment>"+
+   "<GUIOption><RepeatType>1</RepeatType></GUIOption><KeyUp><Syntax>LeftUp 1\n</Syntax></KeyUp>"+
+   "<KeyDown><Syntax>"+String.Join("\n",commands.ToArray())+"\n</Syntax></KeyDown>"+
+   "<Software>Counter-Strike 2</Software></DefaultMacro></Root>";
+ }
+ private static void AmcSmoothingChecks(string output) {
+  string input=Path.Combine(output,"SYNTHETIC_ORIGINAL.amc"),text=SyntheticAmc();
+  File.WriteAllText(input,text,Encoding.Unicode);
+  AmcInput data=AmcInput.Load(input);Timeline before=ParseAmc(input);
+  Check(data.WeaponName=="AK47"&&data.Sensitivity==1.25&&data.MoveCommands==7,
+   "AMC importer reads source sensitivity and timed cumulative positions");
+  AmcResult result=AmcConverter.Smooth(data,Path.Combine(output,"SYNTHETIC_SMOOTH.amc"),1.25);
+  Timeline after=ParseAmc(result.AmcPath);
+  bool anchors=true,small=true,direction=true;
+  int previousTime=before.Moves[0][0],startX=before.Moves[0][1],startY=before.Moves[0][2];
+  foreach(int[] anchor in before.Moves) {
+   int[] p=Position(after,anchor[0]);anchors&=p[0]==anchor[1]&&p[1]==anchor[2];
+   int px=startX,py=startY;
+   foreach(int[] move in after.Moves) {
+    if(move[0]<=previousTime||move[0]>anchor[0])continue;
+    direction&=(anchor[1]>=startX?move[1]>=px:move[1]<=px)&&
+     (anchor[2]>=startY?move[2]>=py:move[2]<=py);
+    px=move[1];py=move[2];
+   }
+   previousTime=anchor[0];startX=anchor[1];startY=anchor[2];
+  }
+  for(int i=1;i<after.Moves.Count;i++)small&=after.Moves[i][0]-after.Moves[i-1][0]>=5;
+  Check(anchors,"AMC smoothing preserves every original cumulative anchor at its exact original time");
+  Check(direction,"Imported AMC direction reversals and zero-axis plateaus are preserved");
+  Check(small&&after.Commands>before.Commands,"Irregular AMC gaps use moderate steps without 1ms bursts");
+  int maxDelta=0,oldX=0,oldY=0;
+  foreach(int[] move in after.Moves){maxDelta=Math.Max(maxDelta,Math.Max(Math.Abs(move[1]-oldX),Math.Abs(move[2]-oldY)));oldX=move[1];oldY=move[2];}
+  Check(maxDelta<=9,"Original 43-count jumps become at most 9-count steps");
+  Check(after.Moves[0][0]==52&&after.Release==394&&after.X==before.X&&after.Y==before.Y,
+   "Imported AMC initial delay, release and total geometry are unchanged");
+  Check(result.SourceKind=="AMC"&&result.Shots==0&&!result.WeaponAndSensitivityAutomaticallyRead,
+   "AMC import does not invent shot counts or claim current game-memory verification");
+  AmcResult second=AmcConverter.Smooth(AmcInput.Load(result.AmcPath),
+   Path.Combine(output,"SYNTHETIC_SMOOTH_TWICE.amc"),1.25);
+  Timeline twice=ParseAmc(second.AmcPath);
+  bool repeat=after.Moves.Count==twice.Moves.Count;
+  for(int i=0;repeat&&i<after.Moves.Count;i++)for(int c=0;c<3;c++)repeat&=after.Moves[i][c]==twice.Moves[i][c];
+  Check(repeat&&twice.Release==after.Release,"Reimporting a smooth AMC adds no further resampling or geometry drift");
+  AmcResult scaled=AmcConverter.Smooth(data,Path.Combine(output,"SYNTHETIC_SMOOTH_SENS_2.500.amc"),2.5);
+  Timeline half=ParseAmc(scaled.AmcPath);bool scaledAnchors=true;
+  foreach(int[] anchor in before.Moves) {
+   int[] p=Position(half,anchor[0]);
+   scaledAnchors&=p[0]==(int)Math.Round(anchor[1]/2.0,MidpointRounding.AwayFromZero)&&
+    p[1]==(int)Math.Round(anchor[2]/2.0,MidpointRounding.AwayFromZero);
+  }
+  Check(scaledAnchors&&half.Release==before.Release,"AMC sensitivity conversion scales cumulative anchors without altering timing");
+  Reject(delegate{AmcConverter.Smooth(data,result.AmcPath,1.25);},"AMC smoothing refuses to overwrite its existing output");
+  Reject(delegate{AmcConverter.Smooth(data,Path.Combine(output,"INVALID_SENS.amc"),0);},"AMC smoothing rejects invalid sensitivity");
+  string bad=Path.Combine(output,"INVALID_INPUT.amc");
+  File.WriteAllText(bad,text.Replace("SENS 1.250","SENS missing"),Encoding.Unicode);
+  Reject(delegate{AmcInput.Load(bad);},"AMC with missing source sensitivity is rejected");
+  File.WriteAllText(bad,text.Replace("MoveR 43 -17","KeyDown 42"),Encoding.Unicode);
+  Reject(delegate{AmcInput.Load(bad);},"Unsupported AMC commands are rejected rather than discarded");
+  File.WriteAllText(bad,text.Replace("MoveR 43 -17","MoveR 128 -17"),Encoding.Unicode);
+  Reject(delegate{AmcInput.Load(bad);},"Out-of-range AMC deltas are rejected");
+  File.WriteAllText(bad,text.Replace("RepeatType>1","RepeatType>2"),Encoding.Unicode);
+  Reject(delegate{AmcInput.Load(bad);},"AMC import requires the original hold-repeat mode");
+  File.WriteAllText(bad,text.Replace("Delay 30 ms","Delay 29 ms"),Encoding.Unicode);
+  Reject(delegate{AmcInput.Load(bad);},"AMC import requires the original complete 30000ms anti-repeat tail");
+  File.WriteAllText(bad,text.Replace("<Root>","<!DOCTYPE Root [<!ENTITY bad 'data'>]><Root>"),Encoding.Unicode);
+  Reject(delegate{AmcInput.Load(bad);},"AMC XML external or declared entities are prohibited");
+  File.WriteAllText(bad,text.Replace("<Software>Counter-Strike 2","<Software>Other"),Encoding.Unicode);
+  Reject(delegate{AmcInput.Load(bad);},"AMC import reports incompatible software");
  }
  private static IntPtr Allocate(List<IntPtr> allocations,int size) {
   IntPtr pointer=Marshal.AllocHGlobal(size);allocations.Add(pointer);return pointer;
@@ -202,13 +320,15 @@ internal static class CoreChecks {
    Check(stats.Shots==30&&stats.MissedShotUpdates==0,"Recorder no longer reports 31 shots after rollback");
    AmcResult result=AmcConverter.Convert(legacy,Path.Combine(output,"AK47_FIXTURE_TEST.amc"),1.25);
    Timeline timeline=ParseAmc(result.AmcPath);
-   Check(result.Shots==30&&result.MoveCommands==58,"Two estimated steps per 29 shot intervals");
+   Check(result.Shots==30&&result.MoveCommands>58&&result.MoveCommands<=290&&result.SmoothingStepMs==10,
+    "Moderate smoothing subdivides AK movement without generating 1ms steps");
    Check(timeline.X==-130&&timeline.Y==363,"Recorded AK geometry retains -130,+363 endpoint");
-   Check(timeline.Release==3006&&timeline.Moves[0][0]==56&&timeline.Moves[57][0]==2906,
-    "Game ticks preserve 56ms first move, 2906ms last move and 3006ms release");
+   Check(timeline.Release==3006&&timeline.Moves[0][0]>=16&&timeline.Moves[0][0]<=36&&
+    timeline.Moves[timeline.Moves.Count-1][0]==2906,
+    "Smaller steps preserve the 2906ms last anchor and 3006ms release");
    bool timing=true;
-   for(int i=1;i<timeline.Moves.Count;i++)timing&=timeline.Moves[i][0]-timeline.Moves[i-1][0]==50;
-   Check(timing,"No frame-by-frame micro delays; all AK movement gaps are 50ms");
+   for(int i=1;i<timeline.Moves.Count;i++)timing&=timeline.Moves[i][0]-timeline.Moves[i-1][0]>=5;
+   Check(timing,"AK movement remains moderately spaced rather than 1ms micro steps");
    List<RecoilPoint> points=AmcConverter.Points(legacy);bool anchors=true;
    foreach(RecoilPoint p in points){
     int at=(int)Math.Round(points[0].ObservedMs+(p.Tick-points[0].Tick)*15.625,MidpointRounding.AwayFromZero);
@@ -216,6 +336,32 @@ internal static class CoreChecks {
     anchors&=Math.Abs(x-p.Yaw*2/(1.25*0.022))<=0.500001&&Math.Abs(y+p.Pitch*2/(1.25*0.022))<=0.500001;
    }
    Check(anchors,"Every measured shot anchor is within half a mouse count");
+   bool midpoints=true,directions=true,linear=true;
+   for(int i=1;i<points.Count;i++) {
+    RecoilPoint a=points[i-1],b=points[i];
+    int middle=(int)Math.Round(points[0].ObservedMs+((a.Tick+b.Tick)/2-points[0].Tick)*15.625,
+     MidpointRounding.AwayFromZero);
+    int mx=0,my=0;foreach(int[] move in timeline.Moves)if(move[0]<=middle){mx=move[1];my=move[2];}
+    midpoints&=mx==(int)Math.Round((a.Yaw+b.Yaw)/(1.25*0.022),MidpointRounding.AwayFromZero)&&
+     my==(int)Math.Round(-(a.Pitch+b.Pitch)/(1.25*0.022),MidpointRounding.AwayFromZero);
+    int from=(int)Math.Round(points[0].ObservedMs+(a.Tick-points[0].Tick)*15.625,MidpointRounding.AwayFromZero);
+    int to=(int)Math.Round(points[0].ObservedMs+(b.Tick-points[0].Tick)*15.625,MidpointRounding.AwayFromZero);
+    int px=0,py=0;foreach(int[] move in timeline.Moves) {
+     if(move[0]<=from){px=move[1];py=move[2];continue;}
+     if(move[0]>to)break;
+     directions&=(b.Yaw>=a.Yaw?move[1]>=px:move[1]<=px)&&
+      (b.Pitch<=a.Pitch?move[2]>=py:move[2]<=py);
+     double f=(move[0]-from)/(double)(to-from);
+     linear&=Math.Abs(move[1]-(a.Yaw+(b.Yaw-a.Yaw)*f)*2/(1.25*0.022))<0.55&&
+      Math.Abs(move[2]+(a.Pitch+(b.Pitch-a.Pitch)*f)*2/(1.25*0.022))<0.55;
+     px=move[1];py=move[2];
+    }
+   }
+   Check(midpoints,"Every old midpoint anchor retains its exact rounded cumulative position and time");
+   Check(directions,"Smoothing retains every interval direction including horizontal and vertical reversals");
+   Check(linear,"Inserted AK steps stay within rounding tolerance of the original linear path");
+   AmcSmoothingChecks(output);
+   ProvidedAmcChecks(fixtures,output);
    Check(!result.InstantaneousRecoilVerified&&File.Exists(result.ReportPath),"Report marks interpolation unverified");
    Reject(delegate{AmcConverter.Convert(legacy,result.AmcPath,1.25);},"Existing AMC is never overwritten");
    AmcResult scaled=AmcConverter.Convert(legacy,Path.Combine(output,"AK47_SENS_2.500.amc"),2.5);
@@ -256,7 +402,7 @@ internal static class CoreChecks {
    string roundtrip=Path.Combine(output,"AUTOMATIC.csv");RecordingIO.WriteCsv(roundtrip,automatic.Samples);
    RecordingIO.WriteJson(Path.ChangeExtension(roundtrip,".json"),automatic.Metadata);
    RecordingData read=RecordingIO.Load(roundtrip);
-   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2.2 CSV/JSON identity roundtrip");
+   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2.3 CSV/JSON identity roundtrip");
    Check(File.ReadAllLines(roundtrip)[0].Split(',').Length==34,"New CSV includes all seven identity/settings fields");
    automatic.Metadata["weapon_definition_index"]=16;
    Reject(delegate{automatic.ResolveMetadata();},"Disagreement between CSV and JSON weapon rejected");
@@ -283,6 +429,8 @@ internal static class CoreChecks {
    Environment.SetEnvironmentVariable("CS2_PROBE_TEST_MODE","1");
    Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
    Preview(new ConverterForm(),Path.Combine(output,"UI_CONVERTER.png"));
+   Preview(new ConverterForm(),Path.Combine(output,"UI_CONVERTER_AMC.png"),
+    Path.Combine(fixtures,"AK47_ORIGINAL_50MS_V022.amc"));
    Check(File.Exists(Path.Combine(output,"UI_CONVERTER.png")),"Converter preview fits the compact window");
    Console.WriteLine("PASS: "+count+" conversion and recording regression checks.");
    Console.WriteLine("No CS2 process was opened. Live weapon/sensitivity detection and recoil accuracy need an in-game test.");

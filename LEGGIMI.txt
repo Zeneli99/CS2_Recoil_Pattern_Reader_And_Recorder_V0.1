@@ -1,6 +1,6 @@
-CS2 RECOIL READER & RECORDER V0.2.2
+CS2 RECOIL READER & RECORDER V0.2.3
 
-Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.2.exe.
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.3.exe.
 Arma equipaggiata e sensibilita' vengono lette automaticamente dal gioco.
 
 REGISTRARE
@@ -13,7 +13,7 @@ REGISTRARE
 Il report .report.json conserva metodo, sensibilita', tempi e limiti della conversione.
 
 CONVERTER
-Apri o trascina il ZIP della registrazione oppure il CSV/JSON.
+Apri o trascina il ZIP della registrazione, il CSV/JSON oppure un AMC CS2 del recorder.
 CSV e JSON devono rimanere insieme, con lo stesso nome.
 Uno ZIP deve contenere una sola coppia; non sceglie un'arma a caso fra piu' registrazioni.
 Funziona anche senza CS2 aperto.
@@ -21,7 +21,17 @@ Per cambiare sensibilita' destinazione, usa il formato 1.250 (punto e tre decima
 Il nome/sensibilita' dei vecchi file V0.1 erano manuali: viene indicato chiaramente.
 
 AMC
-Due movimenti stimati per intervallo fra colpi, niente micro-smoothing per frame.
+Smooth moderato: passaggi di circa 10 ms; nessuna cadenza estrema a 1 ms.
+Punti ai colpi e vecchi punti medi conservati con il loro tempo e spostamento.
+L'arrotondamento cumulativo evita di sommare errori sui piccoli movimenti.
+I passaggi senza spostamento sono omessi: alcuni Delay possono superare 10 ms.
+
+PER RENDERE FLUIDO UN AMC GIA' CREATO
+CONVERTER -> APRI FILE -> scegli l'AMC -> lascia la sensibilita' originale -> CONVERTI IN AMC.
+Salva con un nome nuovo. Ogni punto originale, il primo movimento e i tempi sono conservati.
+Nome arma e sensibilita' vengono letti dall'intestazione dell'AMC.
+Il numero di colpi e la verifica automatica dal gioco non vengono inventati per gli AMC importati.
+Servono MoveR, Delay, click hold, LeftUp e pausa finale 30000 ms.
 Click sinistro hold, rilascio finale e al KeyUp, pausa separata 30000 ms.
 Importa in Bloody nella modalita' FINCHE' TIENI PREMUTO.
 La pausa ritarda il repeat della stessa attivazione; non blocca una nuova pressione.

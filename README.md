@@ -1,22 +1,26 @@
-# CS2 Recoil Reader & Recorder V0.2.2
+# CS2 Recoil Reader & Recorder V0.2.3
 
 Windows x64. F8 arma il recorder; il sinistro delimita lo spray. Il programma legge automaticamente l'arma equipaggiata e la sensibilità dal gioco, salva CSV/JSON e può creare subito un AMC di prova.
 
 ## Uso
 
-1. Estrai il pacchetto completo e apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.2.exe.
+1. Estrai il pacchetto completo e apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.3.exe.
 2. Avvia CS2 con -insecure in una mappa di pratica locale.
 3. Arma e sensibilità compaiono automaticamente. F8, torna al gioco, attendi un secondo con il sinistro rilasciato e spara da recoil azzerato, senza muovere il mouse.
 4. Rilascia il sinistro. Con "Genera AMC automaticamente" attivo trovi la macro nella sottocartella Registrazioni/AMC.
 5. CSV e JSON rimangono nella cartella Registrazioni. L'AMC ha un report associato.
 
-CONVERTER apre una singola registrazione ZIP oppure il CSV/JSON associato; supporta trascinamento. Non richiede che CS2 sia aperto. I file V0.1 rimangono leggibili ma il loro nome arma e la sensibilità erano annotazioni manuali: il convertitore lo segnala.
+CONVERTER apre una singola registrazione ZIP, il CSV/JSON associato oppure un AMC CS2 già esportato dal recorder; supporta trascinamento. Non richiede che CS2 sia aperto. I file V0.1 rimangono leggibili ma il loro nome arma e la sensibilità erano annotazioni manuali: il convertitore lo segnala.
 
 La sensibilità destinazione usa per default il valore registrato. Per cambiarla, togli "Usa la sensibilità della registrazione" e scrivi, per esempio, 1.250: punto e tre decimali. Gli angoli sono convertiti nella scala della sensibilità destinazione; non vengono modificati i tempi.
 
 ## AMC
 
-La conversione riproduce la prova già fatta sull'AK: angoli base registrati negli aggiornamenti dei colpi, due passaggi lineari stimati per intervallo, tempi ricostruiti dai tick. Non usa vecchi pattern o uno smoothing per frame.
+La conversione usa gli angoli base registrati negli aggiornamenti dei colpi e i tempi ricostruiti dai tick. V0.2.3 suddivide ogni vecchio mezzo intervallo in passaggi lineari di circa 10 ms. I punti ai colpi e ai vecchi punti medi mantengono il loro tempo e la posizione cumulativa arrotondata. L'arrotondamento è applicato alla posizione cumulativa, evitando di accumulare errori sui piccoli movimenti. I passaggi senza spostamento vengono omessi; per questo alcuni Delay possono superare 10 ms.
+
+Per rendere più fluido un AMC già creato: CONVERTER → APRI FILE → seleziona l'AMC → lascia attiva la sensibilità originale → CONVERTI IN AMC. Salva con un nome nuovo. Il convertitore mantiene ogni punto originale, il primo movimento al suo tempo originale, il rilascio e la pausa finale. Suddivide i salti successivi senza attraversare un cambio di direzione o attenuare l'ampiezza. Con la stessa sensibilità ogni punto originale rimane identico.
+
+L'import AMC legge la sensibilità dall'intestazione ARMA · SENS 1.250. Non può rileggerla dal gioco né ricavare il numero di colpi: non dichiara queste informazioni come verificate automaticamente. Accetta solo macro CS2 con MoveR, Delay, LeftDown/LeftUp e pausa finale 30000 ms; altri comandi o dati incompleti producono un errore.
 
 La macro contiene LeftDown all'inizio, LeftUp a fine sequenza e nel gestore di rilascio, quindi una pausa finale separata di 30000 ms. Importala in Bloody nella modalità "finché tieni premuto". La pausa ritarda la ripetizione della stessa attivazione; non è un blocco globale su una nuova pressione.
 
@@ -24,7 +28,7 @@ Il contatore tiene il massimo raggiunto: un rollback 29→28→29 non diventa un
 
 ## Limiti da conoscere
 
-- Gli angoli di base non misurano tutta la curva di recoil fra i colpi. I due passaggi intermedi sono stime; l'AMC è una prova da verificare nel gioco, non una compensazione garantita.
+- Gli angoli di base non misurano tutta la curva di recoil fra i colpi. I passaggi intermedi sono stime; l'AMC è una prova da verificare nel gioco, non una compensazione garantita.
 - m_pitch/m_yaw=0.022, weapon_recoil_scale=2.0 e tick a 64Hz sono assunti, non letti automaticamente. La sensibilità base viene letta realmente da dwSensitivity.
 - La conversione è per registrazioni senza zoom/ADS. Non compensa la dispersione casuale dei proiettili.
 - Il rilevamento usa handle dell'arma attiva, ID dell'oggetto e nome designer dell'entità; verifica l'identità e il numero seriale del riferimento. Niente nomi inseriti a mano per nuove registrazioni.
@@ -39,9 +43,9 @@ Workflow: .github/workflows/build-windows.yml. Compilazione Windows x64 con .NET
 
 Per ricompilare: powershell.exe -NoProfile -File .\build.ps1
 
-Le verifiche eseguono l'EXE, controllano la memoria del solo processo di test, i due layout, CSV/JSON, import ZIP, validazione degli errori, geometria/tempi e pausa dell'AMC. Una fixture contiene gli aggiornamenti selezionati dalla registrazione AK dell'utente, incluso il rollback; i campioni intermedi sono omessi e le colonne diagnostiche non necessarie al convertitore sono sintetiche.
+Le verifiche eseguono l'EXE, controllano la memoria del solo processo di test, i due layout, CSV/JSON, import ZIP, validazione degli errori, geometria/tempi e pausa dell'AMC, preservazione dei punti originali e import/suddivisione degli AMC. Una fixture contiene gli aggiornamenti selezionati dalla registrazione AK dell'utente, incluso il rollback; i campioni intermedi sono omessi e le colonne diagnostiche non necessarie al convertitore sono sintetiche.
 
-Il pacchetto include EXE, tutti i sorgenti, workflow, fixture, risultati delle verifiche, anteprime, SHA256 e AMC AK di esempio. Il workflow pubblica gli stessi file verificati in Downloads/V0.2.2 dopo i controlli, senza avviare un'altra build.
+Il pacchetto include EXE, tutti i sorgenti, workflow, fixture, risultati delle verifiche, anteprime, SHA256 e AMC AK di esempio. La cartella AMC_AK47 contiene anche la versione moderata dell'AMC fornito per questa modifica: 58 movimenti a 50 ms diventano 286 movimenti con intervalli di almeno 10 ms; ogni punto originale rimane identico. Il workflow pubblica gli stessi file verificati in Downloads/V0.2.3 dopo i controlli, senza avviare un'altra build.
 
 CS2 non viene eseguito in GitHub Actions. Le nuove letture automatiche dell'arma/sensibilità e la precisione della compensazione richiedono una prova reale.
 
@@ -62,6 +66,6 @@ Il nuovo percorso parte da m_pEntity del pawn locale e percorre m_pNext/m_pPrev 
 
 La ricerca ha un limite di 32768 identità/2 secondi e riconosce i cicli. I collegamenti devono essere coerenti. Non scansiona regioni arbitrarie della memoria e non prova offset a caso. Durante lo spray viene usata l'arma già risolta, con verifica del suo riferimento.
 
-Una regressione in memoria del solo processo di test riproduce il globale 0x1 e controlla identificazione, seriali diversi, ricerca nelle due direzioni, cache scaduta, collegamenti incoerenti e cicli. La correzione del blocco è verificata sul caso riprodotto; resta da provare il percorso nella sessione CS2 reale.
+Una regressione in memoria del solo processo di test riproduce il globale 0x1 e controlla identificazione, seriali diversi, ricerca nelle due direzioni, cache scaduta, collegamenti incoerenti e cicli. La correzione del blocco è verificata sul caso riprodotto. L'utente ha confermato il riconoscimento dell'AK47 e la registrazione con V0.2.2; la fluidità di V0.2.3 richiede la sua prova in gioco.
 
 Campi usati: output/client_dll.json alla revisione 2d204b1400eb08accfb4098ad954602448dacb07. m_pEntity=0x10, m_pPrev=0x50, m_pNext=0x58 e m_flags=0x30. Il report utente non è incluso nel repository; la regressione usa esclusivamente indirizzi e dati del processo di test.
