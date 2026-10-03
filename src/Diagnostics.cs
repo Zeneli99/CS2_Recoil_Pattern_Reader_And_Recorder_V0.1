@@ -30,7 +30,7 @@ namespace RecoilProbe {
     if(key==previousKey && (DateTime.UtcNow-previousTime).TotalSeconds<10)return;
     previous=error;previousKey=key;previousTime=DateTime.UtcNow;
     StringBuilder report=new StringBuilder();
-    report.AppendLine("CS2 RECOIL RECORDER V0.2.4 - DIAGNOSTICA AVVIO");
+    report.AppendLine("CS2 RECOIL INTERNO V0.2.5 - DIAGNOSTICA AVVIO");
     report.AppendLine("UTC: "+DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture));
     report.AppendLine("Il report viene salvato sul PC; non viene inviato automaticamente.");
     report.AppendLine("Layout: "+Layout.TargetBuild+"; fonte "+Layout.SourceCommit);

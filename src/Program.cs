@@ -12,8 +12,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: System.Reflection.AssemblyTitle("CS2 Recoil Probe")]
-[assembly: System.Reflection.AssemblyVersion("0.2.4.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.2.4.0")]
+[assembly: System.Reflection.AssemblyVersion("0.2.5.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.2.5.0")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("CoreChecks")]
 
 namespace RecoilProbe {
@@ -100,9 +100,12 @@ namespace RecoilProbe {
  internal sealed class Sample {
   public double observed_ms, read_duration_ms;
   public int shots_fired, client_tick, controller_tick, predictable_tick, unpredictable_tick;
+  public int camera_view_punch_tick, weapon_recoil_index;
   public uint weapon_hash;
-  public float game_last_fired_time, predictable_tick_fraction;
+  public float game_last_fired_time, predictable_tick_fraction, camera_view_punch_tick_ratio;
+  public float weapon_recoil_index_float, weapon_last_shot_time;
   public Vector predictable_angle, predictable_velocity, unpredictable_angle, view_angle, eye_angle;
+  public Vector input_angle, camera_view_punch;
   public bool left_down;
   public GameIdentity identity;
  }
@@ -111,7 +114,7 @@ namespace RecoilProbe {
   internal Process Process;
   internal ReadMemory Memory;
   internal int Pid, Build;
-  internal long Client, Engine, Pawn, Controller, Services, Rules;
+  internal long Client, Engine, Pawn, Controller, Services, Camera, Rules;
   internal string ClientVersion, EngineVersion;
   private GameIdentity currentIdentity;
   internal GameIdentity ReadIdentity() {
@@ -163,6 +166,7 @@ namespace RecoilProbe {
     ReadIdentity();
     if(requireRecoil) {
      Services=Memory.NamedPointer(Pawn+Layout.AimPunchServices,"Servizi del recoil");
+     Camera=Memory.NamedPointer(Pawn+Layout.CameraServices,"Servizi della telecamera");
      VerifySession();
     }
    } catch(Exception ex) {
@@ -179,7 +183,8 @@ namespace RecoilProbe {
   internal void VerifySession() {
    if (Process.HasExited) throw new InvalidOperationException("CS2 chiuso.");
    if (Memory.NamedPointer(Client + Layout.LocalPawn,"Giocatore locale") != Pawn ||
-    (Services!=0 && Memory.NamedPointer(Pawn + Layout.AimPunchServices,"Servizi del recoil") != Services))
+    (Services!=0 && Memory.NamedPointer(Pawn + Layout.AimPunchServices,"Servizi del recoil") != Services) ||
+    (Camera!=0 && Memory.NamedPointer(Pawn + Layout.CameraServices,"Servizi della telecamera") != Camera))
     throw new InvalidOperationException("Pawn o mappa cambiati. Ripeti la prova.");
    if (Memory.Byte(Rules + Layout.IsValveServer) != 0)
     throw new InvalidOperationException("Server Valve rilevato. Usa una mappa di pratica locale.");
@@ -208,8 +213,17 @@ namespace RecoilProbe {
     s.game_last_fired_time = Memory.Float(Pawn + Layout.LastFiredTime);
     s.weapon_hash = BitConverter.ToUInt32(Memory.Bytes(Pawn + Layout.WeaponHash, 4), 0);
     s.identity = ReadIdentity();
+    s.weapon_recoil_index=Memory.Int(s.identity.WeaponAddress+Layout.WeaponRecoilIndex);
+    s.weapon_recoil_index_float=Memory.Float(s.identity.WeaponAddress+Layout.WeaponRecoilIndexFloat);
+    s.weapon_last_shot_time=Memory.Float(s.identity.WeaponAddress+Layout.WeaponLastShotTime);
     s.view_angle = Vector.From(Memory.Bytes(Client + Layout.ViewAngles, 12), 0);
     s.eye_angle = Vector.From(Memory.Bytes(Pawn + Layout.EyeAngles, 12), 0);
+    s.input_angle = Vector.From(Memory.Bytes(Pawn + Layout.InputViewAngle, 12), 0);
+    byte[] camera=Memory.Bytes(Camera+Layout.CameraViewPunchAngle,20);
+    s.camera_view_punch=Vector.From(camera,0);
+    s.camera_view_punch_tick=BitConverter.ToInt32(camera,Layout.CameraViewPunchTick-Layout.CameraViewPunchAngle);
+    s.camera_view_punch_tick_ratio=BitConverter.ToSingle(camera,
+     Layout.CameraViewPunchTickRatio-Layout.CameraViewPunchAngle);
     s.controller_tick = Memory.Int(Controller + Layout.TickBase);
     s.client_tick = Memory.Int(Memory.NamedPointer(Engine + Layout.NetworkClient,"Client della sessione") + Layout.ClientTick);
     int shotsAfter = Memory.Int(Pawn + Layout.ShotsFired);
@@ -222,10 +236,14 @@ namespace RecoilProbe {
     s.predictable_angle.Validate(180);
     s.unpredictable_angle.Validate(180);
     s.predictable_velocity.Validate(2000);
-    s.view_angle.Validate(1000); s.eye_angle.Validate(1000);
+    s.view_angle.Validate(1000); s.eye_angle.Validate(1000);s.input_angle.Validate(1000);
+    s.camera_view_punch.Validate(180);
     if (s.shots_fired < 0 || s.shots_fired > 1000 || !Finite(s.game_last_fired_time) ||
      !Finite(s.predictable_tick_fraction) || Math.Abs(s.predictable_tick_fraction) > 2 ||
-     s.predictable_tick < -1 || s.unpredictable_tick < -1)
+     !Finite(s.camera_view_punch_tick_ratio)||Math.Abs(s.camera_view_punch_tick_ratio)>2||
+     !Finite(s.weapon_recoil_index_float)||!Finite(s.weapon_last_shot_time)||
+     s.weapon_recoil_index<0||s.weapon_recoil_index>1000||
+     s.predictable_tick < -1 || s.unpredictable_tick < -1 || s.camera_view_punch_tick < -1)
      throw new InvalidOperationException("Campi di memoria non plausibili.");
     return s;
    }

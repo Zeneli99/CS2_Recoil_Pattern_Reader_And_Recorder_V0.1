@@ -7,7 +7,7 @@ using System.Xml;
 
 namespace RecoilProbe {
  internal sealed class RecoilPoint {
-  internal double Tick, ObservedMs, Pitch, Yaw;
+  internal double Tick, ObservedMs, Pitch, Yaw, PitchVelocity, YawVelocity;
   internal int Shot;
  }
  internal sealed class AmcResult {
@@ -17,8 +17,10 @@ namespace RecoilProbe {
   public string SourceKind = "CSV/JSON", ReleaseTimingSource = "Native last-shot time plus median shot cycle";
   public double SourceSensitivity, TargetSensitivity, ActiveDurationMs, MaximumTimingResidualMs;
   public bool WeaponAndSensitivityAutomaticallyRead, InstantaneousRecoilVerified = false;
-  public string Method = "Recorded shot-time base-angle anchors; moderate linear steps around 10ms, retaining original midpoint and shot anchors.";
-  public string Assumptions = "m_pitch=0.022; m_yaw=0.022; weapon_recoil_scale=2.0; game_tick_hz=64; MoveR uses raw mouse counts.";
+  public bool DeterministicRecoilStateDirectlyRead, BallisticTrajectoryDirectlyRead, ServerSpreadIncluded;
+  public RecoilDynamicsFit Dynamics;
+  public string Method = "Direct game-memory recoil state replay: angle, angular velocity and native tick are fitted to the recording, integrated at 1/128 second, bounded to monotonic moderate progress and emitted around 10ms; every recorded shot anchor remains exact.";
+  public string Assumptions = "m_pitch=0.022; m_yaw=0.022; weapon_recoil_scale=2.0; game_tick_hz=64; deterministic recoil only; server spread is not readable here; MoveR uses raw mouse counts.";
  }
  internal static class AmcConverter {
   private sealed class Group {
@@ -86,7 +88,8 @@ namespace RecoilProbe {
    foreach(Group group in groups.Values) {
     Sample s=group.Stable();
     points.Add(new RecoilPoint {Tick=s.predictable_tick+(double)s.predictable_tick_fraction,
-     ObservedMs=group.FirstTime,Pitch=s.predictable_angle.pitch,Yaw=s.predictable_angle.yaw,Shot=group.Shot});
+     ObservedMs=group.FirstTime,Pitch=s.predictable_angle.pitch,Yaw=s.predictable_angle.yaw,
+     PitchVelocity=s.predictable_velocity.pitch,YawVelocity=s.predictable_velocity.yaw,Shot=group.Shot});
    }
    points.Sort(delegate(RecoilPoint a,RecoilPoint b){return a.Tick.CompareTo(b.Tick);});
    if(points.Count<2)throw new InvalidOperationException("Servono almeno due colpi nello stesso spray.");
@@ -144,13 +147,46 @@ namespace RecoilProbe {
     lastTime=time;lastX=x;lastY=y;
    }
   }
+  private static void DynamicsSegment(List<string> commands,int fromTime,int toTime,
+   RecoilPoint from,RecoilPoint to,RecoilDynamicsFit fit,double scale,
+   ref int lastTime,ref int lastX,ref int lastY,AmcResult result) {
+   if(toTime<=fromTime)throw new InvalidOperationException("Timeline recoil interna non valida.");
+   int span=toTime-fromTime;
+   int parts=Math.Max(1,(span+SmoothStepMs-1)/SmoothStepMs);
+   double previousPitch=from.Pitch,previousYaw=from.Yaw;
+   for(int part=1;part<=parts;part++) {
+    double fraction=part/(double)parts,pitch,yaw;
+    RecoilDynamics.EvaluateCorrected(from,to,fraction,fit,out pitch,out yaw);
+    pitch=BoundProgress(pitch,from.Pitch,to.Pitch,fraction);
+    yaw=BoundProgress(yaw,from.Yaw,to.Yaw,fraction);
+    pitch=to.Pitch>=from.Pitch?Math.Max(previousPitch,Math.Min(to.Pitch,pitch)):
+     Math.Min(previousPitch,Math.Max(to.Pitch,pitch));
+    yaw=to.Yaw>=from.Yaw?Math.Max(previousYaw,Math.Min(to.Yaw,yaw)):
+     Math.Min(previousYaw,Math.Max(to.Yaw,yaw));
+    if(part==parts){pitch=to.Pitch;yaw=to.Yaw;}
+    previousPitch=pitch;previousYaw=yaw;
+    int time=fromTime+Round(span*fraction),x=Round(yaw*scale),y=Round(-pitch*scale);
+    int dx=x-lastX,dy=y-lastY;
+    if(dx==0&&dy==0)continue;
+    Delay(commands,time-lastTime);Move(commands,dx,dy,result);
+    lastTime=time;lastX=x;lastY=y;
+   }
+  }
+  private static double BoundProgress(double value,double from,double to,double fraction) {
+   double delta=to-from;if(Math.Abs(delta)<0.0000000001)return to;
+   double progress=(value-from)/delta;
+   double low=Math.Max(0,fraction-0.05),high=Math.Min(1,fraction+0.05);
+   progress=Math.Max(low,Math.Min(high,progress));return from+delta*progress;
+  }
   internal static AmcResult Convert(RecordingData data,string output,double targetSensitivity) {
    if(!IdentityReader.ValidSensitivity(targetSensitivity))
     throw new InvalidOperationException("Sensibilita' destinazione non valida.");
    List<RecoilPoint> points=Points(data);
    AmcResult result=new AmcResult {Weapon=data.WeaponName,Shots=points.Count,
     SourcePath=data.SourcePath,SourceSensitivity=data.Sensitivity,TargetSensitivity=targetSensitivity,
-    WeaponAndSensitivityAutomaticallyRead=data.AutomaticIdentity};
+    WeaponAndSensitivityAutomaticallyRead=data.AutomaticIdentity,SourceKind="CS2_INTERNAL_RECOIL_STATE",
+    DeterministicRecoilStateDirectlyRead=true,BallisticTrajectoryDirectlyRead=false,ServerSpreadIncluded=false};
+   result.Dynamics=RecoilDynamics.Fit(points);
    List<string> commands=new List<string>();commands.Add("LeftDown 1");
    double firstTime=points[0].ObservedMs,firstTick=points[0].Tick;
    if(firstTime<0 || firstTime>2000)throw new InvalidOperationException("Origine del primo colpo non valida.");
@@ -163,19 +199,10 @@ namespace RecoilProbe {
      Math.Abs(nativeTime-points[i].ObservedMs));
     if(i==0)continue;
     gaps.Add((points[i].Tick-points[i-1].Tick)*15.625);
-    // Keep both old anchor boundaries, subdividing each half independently.
-    double tickGap=points[i].Tick-points[i-1].Tick;
-    for(int half=0;half<2;half++) {
-     double f0=half/2.0,f1=(half+1)/2.0;
-     int from=Round(firstTime+(points[i-1].Tick+tickGap*f0-firstTick)*15.625);
-     int to=Round(firstTime+(points[i-1].Tick+tickGap*f1-firstTick)*15.625);
-     double fromPitch=points[i-1].Pitch+(points[i].Pitch-points[i-1].Pitch)*f0;
-     double toPitch=points[i-1].Pitch+(points[i].Pitch-points[i-1].Pitch)*f1;
-     double fromYaw=points[i-1].Yaw+(points[i].Yaw-points[i-1].Yaw)*f0;
-     double toYaw=points[i-1].Yaw+(points[i].Yaw-points[i-1].Yaw)*f1;
-     Segment(commands,from,to,fromYaw*scale,-fromPitch*scale,toYaw*scale,-toPitch*scale,
-      ref lastTime,ref lastX,ref lastY,result);
-    }
+    int from=Round(firstTime+(points[i-1].Tick-firstTick)*15.625);
+    int to=Round(firstTime+(points[i].Tick-firstTick)*15.625);
+    DynamicsSegment(commands,from,to,points[i-1],points[i],result.Dynamics,scale,
+     ref lastTime,ref lastX,ref lastY,result);
    }
    if(result.MaximumTimingResidualMs>30)
     throw new InvalidOperationException("Tempi osservati e tick troppo diversi. Ripeti la registrazione.");

@@ -8,9 +8,9 @@ namespace RecoilProbe {
   public double TimeMs, ExpectedX, ExpectedY, MeasuredX, MeasuredY;
  }
  internal sealed class ExecutionCheckResult {
-  public string Kind = "AMC_EXECUTION_TEST", ExpectedAmc, Weapon, CaptureReason;
-  public string Method = "Least-squares timing/axis-gain fit of AMC step positions against recorded eye-angle changes.";
-  public string Assumptions = "m_pitch=m_yaw=0.022; eye angles represent player input; no zoom; mouse held stationary while Bloody executes the selected AMC.";
+  public string Kind = "AMC_EXECUTION_TEST", ExpectedAmc, Weapon, CaptureReason, AngleSource;
+  public string Method = "Least-squares timing/axis-gain fit of AMC step positions against the directly recorded input/view-angle changes.";
+  public string Assumptions = "m_pitch=m_yaw=0.022; selected input/view angles represent player input; no zoom; mouse held stationary while Bloody executes the selected AMC.";
   public bool InstantaneousBulletRecoilVerified = false, RawMouseCountsDirectlyRead = false;
   public bool CompleteTimelineObserved, SearchBoundaryReached, HorizontalMovementPresent, VerticalMovementPresent;
   public int SamplesCompared, ExpectedReleaseMs, AntiRepeatMs, MoveCommands;
@@ -87,6 +87,21 @@ namespace RecoilProbe {
    if(baseline==null||baseline.eye_angle==null)
     throw new InvalidOperationException("Baseline precedente al click assente.");
    baseline.eye_angle.Validate(1000);
+   bool inputComplete=baseline.input_angle!=null;
+   double inputRange=0,eyeRange=0;
+   foreach(Sample sample in samples) {
+    if(sample.eye_angle==null)throw new InvalidOperationException("Angoli visuale assenti nella prova.");
+    sample.eye_angle.Validate(1000);
+    eyeRange=Math.Max(eyeRange,Math.Sqrt(Math.Pow(Delta(sample.eye_angle.pitch,baseline.eye_angle.pitch),2)+
+     Math.Pow(Delta(sample.eye_angle.yaw,baseline.eye_angle.yaw),2)));
+    if(sample.input_angle==null){inputComplete=false;continue;}
+    sample.input_angle.Validate(1000);
+    if(baseline.input_angle!=null)inputRange=Math.Max(inputRange,
+     Math.Sqrt(Math.Pow(Delta(sample.input_angle.pitch,baseline.input_angle.pitch),2)+
+      Math.Pow(Delta(sample.input_angle.yaw,baseline.input_angle.yaw),2)));
+   }
+   bool useInput=inputComplete&&inputRange>0.00001&&inputRange>=eyeRange;
+   Vector baseAngle=useInput?baseline.input_angle:baseline.eye_angle;
    List<Actual> actual=new List<Actual>();List<double> gaps=new List<double>();
    double previousTime=Double.NegativeInfinity,movement=0;
    int stride=Math.Max(1,(samples.Count+2499)/2500);
@@ -96,15 +111,14 @@ namespace RecoilProbe {
     if(Double.IsNaN(s.observed_ms)||Double.IsInfinity(s.observed_ms)||s.observed_ms<previousTime)
      throw new InvalidOperationException("Tempi della prova non ordinati o non validi.");
     if(i>0)gaps.Add(s.observed_ms-previousTime);previousTime=s.observed_ms;
-    if(s.eye_angle==null)throw new InvalidOperationException("Angoli visuale assenti nella prova.");
-    s.eye_angle.Validate(1000);
     if(i%stride!=0&&i!=samples.Count-1)continue;
+    Vector measured=useInput?s.input_angle:s.eye_angle;
     Actual a=new Actual {Time=s.observed_ms,
-     X=-Delta(s.eye_angle.yaw,baseline.eye_angle.yaw)/angularCount,
-     Y=Delta(s.eye_angle.pitch,baseline.eye_angle.pitch)/angularCount};
+     X=-Delta(measured.yaw,baseAngle.yaw)/angularCount,
+     Y=Delta(measured.pitch,baseAngle.pitch)/angularCount};
     movement=Math.Max(movement,Math.Sqrt(a.X*a.X+a.Y*a.Y));actual.Add(a);
    }
-   if(movement<2)throw new InvalidOperationException("Nessun movimento AMC misurato. Esegui la macro in Bloody durante il test.");
+   if(movement<2)throw new InvalidOperationException("Nessun movimento AMC misurato negli angoli input/visuale. Esegui la macro in Bloody durante il test.");
    if(actual[actual.Count-1].Time<300)
     throw new InvalidOperationException("Prova troppo breve. Registra lo spray completo.");
    Fit best=null;
@@ -117,6 +131,7 @@ namespace RecoilProbe {
    MouseAnchor last=amc.Anchors[amc.Anchors.Count-1];
    ExecutionCheckResult result=new ExecutionCheckResult {
     ExpectedAmc=Path.GetFileName(amc.SourcePath??"selected.amc"),Weapon=amc.WeaponName,
+    AngleSource=useInput?"C_BasePlayerPawn.v_angle":"C_CSPlayerPawn.m_angEyeAngles (fallback)",
     CaptureReason=reason,Sensitivity=sensitivity,SamplesCompared=actual.Count,
     ExpectedReleaseMs=amc.ReleaseTime,AntiRepeatMs=amc.TailMs,MoveCommands=amc.MoveCommands,
     LagMs=best.Lag,DurationFactor=best.Duration,HorizontalGain=best.GainX,VerticalGain=best.GainY,

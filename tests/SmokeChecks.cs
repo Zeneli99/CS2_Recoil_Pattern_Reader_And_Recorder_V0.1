@@ -34,7 +34,7 @@ internal static class SmokeChecks {
    Assembly program = Assembly.LoadFrom(executable);
    Check(IntPtr.Size == 8, "Windows x64 test process");
    Check(program.GetName().ProcessorArchitecture == ProcessorArchitecture.Amd64, "EXE targets AMD64");
-   Check(program.GetName().Version.ToString() == "0.2.4.0", "Version 0.2.4.0");
+   Check(program.GetName().Version.ToString() == "0.2.5.0", "Version 0.2.5.0");
    Check(program.EntryPoint.IsDefined(typeof(STAThreadAttribute), false), "GUI entry point uses STA");
    Type native = program.GetType("RecoilProbe.Native", true);
    uint rights = (uint)native.GetField("ReadOnlyRights", Static).GetRawConstantValue();
@@ -107,7 +107,7 @@ internal static class SmokeChecks {
     Set(sample, "read_duration_ms", i == 4 ? 2.5 : 0.1);
     Set(sample, "left_down", i > 0 && i < 5);
     Set(sample, "weapon_hash", (uint)12345);
-    foreach (string key in new string[] { "predictable_angle", "predictable_velocity", "unpredictable_angle", "view_angle", "eye_angle" }) {
+    foreach (string key in new string[] { "predictable_angle", "predictable_velocity", "unpredictable_angle", "view_angle", "eye_angle", "input_angle", "camera_view_punch" }) {
      object vector = Activator.CreateInstance(vectorType, true);
      Set(vector, "pitch", -1.25F); Set(vector, "yaw", 2.5F); Set(vector, "roll", 0F);
      Set(sample, key, vector);
@@ -145,8 +145,8 @@ internal static class SmokeChecks {
     string csv = Field<string>(saved, "CsvPath"), json = Field<string>(saved, "MetadataPath");
     Check(File.Exists(csv) && File.Exists(json), "CSV and JSON export succeeds");
     string[] rows = File.ReadAllLines(csv);
-    Check(rows.Length == 7 && rows[0].Split(',').Length == 34, "CSV contains header and all six samples");
-    for (int i = 1; i < rows.Length; i++) Check(rows[i].Split(',').Length == 34, "CSV row " + i + " has all fields");
+    Check(rows.Length == 7 && rows[0].Split(',').Length == 45, "CSV contains direct internal-state fields and all six samples");
+    for (int i = 1; i < rows.Length; i++) Check(rows[i].Split(',').Length == 45, "CSV row " + i + " has all fields");
     Check(rows[1].StartsWith("-1,0.1,", StringComparison.Ordinal), "CSV baseline and decimal format are culture independent");
     Check(rows[2].Contains(",-1.25,2.5,0,"), "Angle signs and decimals are preserved");
     Dictionary<string, object> metadata = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(json));
@@ -157,6 +157,9 @@ internal static class SmokeChecks {
     Check(Convert.ToDouble(metadata["sensitivity_detected"])==1.25, "JSON records detected sensitivity");
     Check(!(bool)metadata["amc_generated"] && !(bool)metadata["instantaneous_bullet_recoil_reconstruction_verified"],
      "JSON keeps AMC and recoil reconstruction unverified");
+    Check((bool)metadata["deterministic_recoil_state_directly_read"]&&
+     !(bool)metadata["ballistic_trajectory_directly_read"]&&!(bool)metadata["server_spread_included"],
+     "JSON distinguishes direct deterministic state from unread server trajectory and spread");
     object again = save.Invoke(recorder, new object[] { game, samples, "Second synthetic export", false });
     Check(Field<string>(again, "CsvPath") != csv && File.Exists(csv), "Repeated export creates a new recording");
    } finally { System.Threading.Thread.CurrentThread.CurrentCulture = previousCulture; }

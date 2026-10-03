@@ -8,7 +8,7 @@ $buildOutput = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 } else { [System.IO.Path]::GetFullPath((Join-Path $buildRoot $OutputDirectory)) }
 [void][System.IO.Directory]::CreateDirectory($buildOutput)
-$buildExeName = 'CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.4.exe'
+$buildExeName = 'CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.5.exe'
 $buildExe = Join-Path $buildOutput $buildExeName
 $buildReferences = @('/r:System.dll','/r:System.Core.dll','/r:System.Drawing.dll',
     '/r:System.Windows.Forms.dll','/r:System.Management.dll','/r:System.Web.Extensions.dll',
@@ -17,7 +17,8 @@ $buildArguments = @('/nologo','/codepage:65001','/target:winexe','/platform:x64'
     ('/out:' + $buildExe)) + $buildReferences + @(
     (Join-Path $buildRoot 'src/Program.cs'), (Join-Path $buildRoot 'src/Layout.cs'),
     (Join-Path $buildRoot 'src/GameIdentity.cs'), (Join-Path $buildRoot 'src/RecordingIO.cs'),
-    (Join-Path $buildRoot 'src/AmcConverter.cs'), (Join-Path $buildRoot 'src/AmcInput.cs'),
+    (Join-Path $buildRoot 'src/RecoilDynamics.cs'), (Join-Path $buildRoot 'src/AmcConverter.cs'),
+    (Join-Path $buildRoot 'src/AmcInput.cs'),
     (Join-Path $buildRoot 'src/Recorder.cs'), (Join-Path $buildRoot 'src/AmcExecutionCheck.cs'),
     (Join-Path $buildRoot 'src/UserInterface.cs'), (Join-Path $buildRoot 'src/Diagnostics.cs'))
 & $buildCompiler @buildArguments
@@ -47,7 +48,7 @@ Get-Content -LiteralPath (Join-Path $buildOutput 'CONVERSION_VERIFY.txt') |
 Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_CONVERTER.png') -Destination $buildOutput -Force
 Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_CONVERTER_AMC.png') -Destination $buildOutput -Force
 
-$buildPackage = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.2.4_FULL'
+$buildPackage = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.2.5_FULL'
 [void][System.IO.Directory]::CreateDirectory($buildPackage)
 Copy-Item -LiteralPath $buildExe -Destination $buildPackage -Force
 foreach ($buildItem in @('Avvia.cmd','LEGGIMI.txt','a2x-LICENSE.txt','README.md','ANALISI_AK47.md')) {
@@ -77,12 +78,12 @@ foreach ($buildItem in @('build.ps1','Avvia.cmd','LEGGIMI.txt','a2x-LICENSE.txt'
 }
 $buildCommit = if ([string]::IsNullOrWhiteSpace($env:GITHUB_SHA)) { 'local build' } else { $env:GITHUB_SHA }
 $buildInfo = @(
-    'CS2 Recoil Pattern Reader And Recorder V0.2.4',
+    'CS2 Recoil Pattern Reader And Recorder V0.2.5',
     ('Commit: ' + $buildCommit),
     ('UTC: ' + [DateTime]::UtcNow.ToString('o')),
     'Platform: Windows x64, .NET Framework',
     'Target engine build: 14188',
-    'Converter and moderate 10ms smoothing tested for anchor geometry, recorded release, timing and AMC reimport',
+    'Direct internal recoil-state dynamics and moderate 10ms output tested for exact shot anchors, release and AMC reimport',
     'AMC execution fitting tested on synthetic quantized traces; real Bloody execution: NOT TESTED',
     'Live weapon/sensitivity detection and recoil compensation: NOT TESTED'
 )
@@ -91,7 +92,7 @@ $buildHash = (Get-FileHash -LiteralPath $buildExe -Algorithm SHA256).Hash
 ($buildHash + '  ' + $buildExeName) | Set-Content -LiteralPath (Join-Path $buildPackage 'SHA256.txt') -Encoding ASCII
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$buildZip = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.2.4_FULL.zip'
+$buildZip = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.2.5_FULL.zip'
 if (Test-Path -LiteralPath $buildZip) { throw 'ZIP already exists; choose a fresh output directory.' }
 Add-Type -AssemblyName System.IO.Compression
 $buildStream = [System.IO.File]::Open($buildZip, [System.IO.FileMode]::CreateNew)

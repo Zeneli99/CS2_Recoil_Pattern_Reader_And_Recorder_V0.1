@@ -1,4 +1,4 @@
-# Analisi della registrazione AK47 con V0.2.3
+# Analisi della registrazione AK47 e correzione V0.2.5
 
 L'analisi riguarda CSV, JSON, AMC e report della registrazione fornita il 3 ottobre 2026. La registrazione non contiene una prova dell'AMC in esecuzione: gli angoli della visuale restano praticamente fermi.
 
@@ -34,7 +34,15 @@ La modalità TEST AMC registra una prova della macro eseguita da Bloody. Usa le 
 
 Il test mantiene CSV/JSON completi e produce un file .execution.json con la timeline attesa e la traccia di confronto. Non converte una prova di macro in un nuovo pattern recoil. Non modifica automaticamente velocità o ampiezza sulla base di una stima non verificata.
 
-Per usare il test: apri V0.2.4, premi TEST AMC..., seleziona esattamente l'AMC importato in Bloody, equipaggia AK47 a 1.250 nella pratica locale, premi F8 nel gioco e poi esegui lo spray completo con la macro attiva e il mouse fisicamente fermo. Rilascia il pulsante alla fine. Il file .execution.json è la nuova evidenza necessaria per verificare la riproduzione.
+Per usare il test aggiornato: apri V0.2.5, premi TEST AMC..., seleziona esattamente l'AMC importato in Bloody, equipaggia AK47 a 1.250 nella pratica locale, premi F8 nel gioco e poi esegui lo spray completo con la macro attiva e il mouse fisicamente fermo. Rilascia il pulsante alla fine. Il file .execution.json è la nuova evidenza necessaria per verificare la riproduzione.
+
+## Correzione V0.2.5: stato interno e test `fdece407`
+
+Il test `fdece407` ha registrato 30 colpi ma `m_angEyeAngles` è rimasto praticamente immobile; per questo non è stato possibile creare `.execution.json`. V0.2.5 registra anche `C_BasePlayerPawn.v_angle` e lo usa come prima sorgente del confronto AMC, mantenendo `m_angEyeAngles` soltanto come fallback per file precedenti.
+
+Per la generazione AMC, V0.2.5 usa sia l'angolo sia la velocità di `CCSPlayer_AimPunchServices`. Adatta allo spray il decadimento angolare esponenziale, il decadimento lineare e il decadimento della velocità, integra lo stato a 1/128 di secondo e forza una correzione continua molto piccola affinché ogni anchor misurato resti esatto. Il residuo e i tre parametri sono salvati nel report; un fit fuori limite o impreciso blocca l'AMC invece di inventare la curva.
+
+Questo sostituisce la linea retta di V0.2.3, ma non trasforma una lettura client in una traiettoria server completa: `ballistic_trajectory_directly_read` e `server_spread_included` rimangono false.
 
 ## Fonti dei campi e distinzione fra visuale e proiettili
 
@@ -42,4 +50,4 @@ Per usare il test: apri V0.2.4, premi TEST AMC..., seleziona esattamente l'AMC i
 - [Schema CCSPlayer_AimPunchServices](https://s2v.app/SchemaExplorer/cs2/client/CCSPlayer_AimPunchServices).
 - [Aggiornamento ufficiale CS2 del 21 aprile 2026](https://store.steampowered.com/news/posts/?appids=730&enddate=1776897650&feed=steam_community_announcements): il comportamento della visuale e le traiettorie dei proiettili sono trattati separatamente.
 
-Nessuna nuova formula del recoil è stata dichiarata esatta. I test del pacchetto verificano esportazione, tempi e stima dell'esecuzione su dati sintetici con scarti noti; GitHub Actions non esegue CS2.
+La nuova dinamica è verificata su stati sintetici con parametri noti e sulla fixture AK47, mantenendo esatti i punti dei colpi. Non viene dichiarata una lettura diretta dell'impatto server; GitHub Actions non esegue CS2.

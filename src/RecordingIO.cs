@@ -159,7 +159,14 @@ namespace RecoilProbe {
      s.unpredictable_angle = ReadVector(row, columns, "unpredictable", "");
      s.view_angle = ReadVector(row, columns, "view", "");
      s.eye_angle = ReadVector(row, columns, "eye", "");
+     s.input_angle = ReadVector(row, columns, "input", "");
+     s.camera_view_punch = ReadVector(row, columns, "camera_view_punch", "");
+     s.camera_view_punch_tick = Integer(row,columns,"camera_view_punch_tick",0);
+     s.camera_view_punch_tick_ratio = (float)Number(row,columns,"camera_view_punch_tick_ratio",0);
      s.game_last_fired_time = (float)Number(row, columns, "game_last_fired_time", 0);
+     s.weapon_recoil_index = Integer(row,columns,"weapon_recoil_index",Math.Max(0,s.shots_fired));
+     s.weapon_recoil_index_float = (float)Number(row,columns,"weapon_recoil_index_float",s.weapon_recoil_index);
+     s.weapon_last_shot_time = (float)Number(row,columns,"weapon_last_shot_time",s.game_last_fired_time);
      s.client_tick = Integer(row, columns, "client_tick", 0);
      s.controller_tick = Integer(row, columns, "controller_tick", 0);
      s.weapon_hash = Unsigned(row, columns, "weapon_hash", 0);
@@ -175,11 +182,13 @@ namespace RecoilProbe {
        Ammo = Integer(row,columns,"ammo",0)
       };
      }
-     if (s.shots_fired < 0 || s.shots_fired > 1000 ||
+     if (s.shots_fired < 0 || s.shots_fired > 1000 ||s.weapon_recoil_index<0||
+      s.weapon_recoil_index>1000||s.camera_view_punch_tick< -1||
       s.predictable_tick < -1 || s.predictable_tick_fraction < 0 || s.predictable_tick_fraction >= 1)
       throw new InvalidOperationException("Valori del colpo/tick non plausibili nel CSV.");
      s.predictable_angle.Validate(180); s.predictable_velocity.Validate(2000);
      s.unpredictable_angle.Validate(180);s.eye_angle.Validate(1000);s.view_angle.Validate(1000);
+     s.input_angle.Validate(1000);s.camera_view_punch.Validate(180);
      result.Samples.Add(s);
     }
    }
@@ -222,7 +231,10 @@ namespace RecoilProbe {
      "predictable_pitch,predictable_yaw,predictable_roll," +
      "predictable_velocity_pitch,predictable_velocity_yaw,predictable_velocity_roll," +
      "unpredictable_tick,unpredictable_pitch,unpredictable_yaw,unpredictable_roll," +
-     "view_pitch,view_yaw,view_roll,eye_pitch,eye_yaw,eye_roll,left_down,shot_update," +
+     "view_pitch,view_yaw,view_roll,eye_pitch,eye_yaw,eye_roll," +
+     "input_pitch,input_yaw,input_roll,camera_view_punch_pitch,camera_view_punch_yaw," +
+     "camera_view_punch_roll,camera_view_punch_tick,camera_view_punch_tick_ratio," +
+     "weapon_recoil_index,weapon_recoil_index_float,weapon_last_shot_time,left_down,shot_update," +
      "weapon_definition_index,weapon_handle,game_sensitivity,pawn_mouse_sensitivity," +
      "fov_sensitivity_adjust,is_scoped,ammo");
     int highWater = samples[0].shots_fired;
@@ -235,6 +247,9 @@ namespace RecoilProbe {
      AddVector(values,s.predictable_angle);AddVector(values,s.predictable_velocity);
      Add(values,s.unpredictable_tick);AddVector(values,s.unpredictable_angle);
      AddVector(values,s.view_angle);AddVector(values,s.eye_angle);
+     AddVector(values,s.input_angle);AddVector(values,s.camera_view_punch);
+     Add(values,s.camera_view_punch_tick);Add(values,s.camera_view_punch_tick_ratio);
+     Add(values,s.weapon_recoil_index);Add(values,s.weapon_recoil_index_float);Add(values,s.weapon_last_shot_time);
      values.Add(s.left_down?"1":"0");values.Add(update?"1":"0");
      if(s.identity==null)throw new InvalidOperationException("Identita' automatica mancante nel campione.");
      Add(values,s.identity.ItemDefinitionIndex);Add(values,s.identity.WeaponHandle);

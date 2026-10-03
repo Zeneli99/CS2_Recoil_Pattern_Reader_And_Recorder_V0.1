@@ -1,14 +1,22 @@
-TEST AMC — V0.2.4
+TEST AMC — V0.2.5
 Premi TEST AMC... e seleziona lo stesso AMC che esegui in Bloody.
 In CS2: arma e sensibilita' dell'AMC, F8, poi spray completo con macro attiva e mouse fermo.
 Rilascia alla fine. Trovi il file .execution.json in Registrazioni; contiene confronto tempi/ampiezza.
 ESCI DAL TEST ripristina la registrazione normale. La prova non genera un nuovo pattern.
 La precisione dei proiettili non e' ancora verificata. Leggi ANALISI_AK47.md.
 
-CS2 RECOIL READER & RECORDER V0.2.4
+CS2 RECOIL INTERNO V0.2.5
 
-Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.4.exe.
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.5.exe.
 Arma equipaggiata e sensibilita' vengono lette automaticamente dal gioco.
+
+LETTURA DIRETTA DEL RECOIL
+Il programma legge angolo base, velocita' angolare e tick direttamente dallo stato recoil di CS2.
+Adatta la dinamica allo spray, la integra a 1/128 di secondo e crea MoveR moderati di circa 10 ms.
+Ogni punto registrato al colpo resta esatto. CSV/JSON rimangono come diagnostica.
+Legge anche v_angle, camera view punch e recoil index per controllare il test AMC.
+Non inietta DLL, non crea hook e non scrive nella memoria del gioco.
+La dispersione casuale e la traiettoria server non sono leggibili con questo metodo: non sono dichiarate al 100%.
 
 REGISTRARE
 1. CS2 con -insecure, mappa di pratica LOCALE.
@@ -28,8 +36,8 @@ Per cambiare sensibilita' destinazione, usa il formato 1.250 (punto e tre decima
 Il nome/sensibilita' dei vecchi file V0.1 erano manuali: viene indicato chiaramente.
 
 AMC
-Smooth moderato: passaggi di circa 10 ms; nessuna cadenza estrema a 1 ms.
-Punti ai colpi e vecchi punti medi conservati con il loro tempo e spostamento.
+Ricostruzione dalla dinamica interna: passaggi di circa 10 ms; nessuna cadenza estrema a 1 ms.
+Punti registrati ai colpi conservati con il loro tempo e spostamento.
 L'arrotondamento cumulativo evita di sommare errori sui piccoli movimenti.
 I passaggi senza spostamento sono omessi: alcuni Delay possono superare 10 ms.
 
@@ -44,8 +52,8 @@ Importa in Bloody nella modalita' FINCHE' TIENI PREMUTO.
 La pausa ritarda il repeat della stessa attivazione; non blocca una nuova pressione.
 La conversione assume m_pitch=m_yaw=0.022, recoil scale=2 e tick a 64Hz.
 Non compensa la dispersione casuale.
-Gli angoli base letti nei file non misurano tutta la traiettoria fra i colpi.
-AMC di prova: la compensazione non e' garantita al 100%.
+Il report salva parametri e residuo della dinamica ricostruita.
+AMC di prova: la compensazione e la dispersione server non sono garantite al 100%.
 
 CONTROLLI
 Rollback 29->28->29 contato una sola volta.

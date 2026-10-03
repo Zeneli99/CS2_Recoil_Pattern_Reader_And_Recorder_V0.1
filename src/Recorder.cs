@@ -32,7 +32,7 @@ namespace RecoilProbe {
      GameIdentity initial=game.ReadIdentity();identity(initial);
      if(expectedAmc!=null)AmcExecutionCheck.ValidateIdentity(expectedAmc,initial);
      status(initial.WeaponName+" · sens "+initial.Sensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+
-      (expectedAmc==null?" · torna al gioco e spara quando il recoil e' azzerato.":" · PROVA AMC: esegui la macro in Bloody con il mouse fermo."));
+      (expectedAmc==null?" · LETTURA RECOIL INTERNO: torna al gioco e spara da fermo.":" · PROVA AMC: esegui la macro in Bloody con il mouse fermo."));
      List<Sample> samples=new List<Sample>();Sample baseline=null;
      double pressTime=0;int stableReads=0,attempts=0;
      string reason="Rilascio del pulsante sinistro";bool settingsChanged=false;
@@ -97,7 +97,7 @@ namespace RecoilProbe {
    result.MetadataPath=Path.Combine(directory,name+".json");
    RecordingIO.WriteCsv(result.CsvPath,samples);
    Dictionary<string,object> meta=new Dictionary<string,object>();
-   meta["tool"]="CS2 Recoil Probe 0.2.4";meta["source_commit"]=Layout.SourceCommit;
+   meta["tool"]="CS2 Recoil Probe 0.2.5";meta["source_commit"]=Layout.SourceCommit;
    meta["target_build"]=Layout.TargetBuild;meta["observed_build"]=game.Build;
    meta["client_file_version"]=game.ClientVersion;meta["engine_file_version"]=game.EngineVersion;
    meta["weapon_detected"]=info.WeaponName;meta["weapon_definition_index"]=info.ItemDefinitionIndex;
@@ -113,8 +113,10 @@ namespace RecoilProbe {
    meta["session_checks"]="-insecure, not Valve DS, same pawn, foreground, alive, sign-on full";
    meta["local_only_guaranteed_by_checks"]=false;meta["angle_fields_are_raw_base_values"]=true;
    meta["instantaneous_bullet_recoil_reconstruction_verified"]=false;
-   meta["capture_mode"]=expectedAmc==null?"STATIONARY_REFERENCE":"AMC_EXECUTION_TEST";
-   meta["amc_generated"]=false;meta["conversion_assumptions"]="m_pitch=m_yaw=0.022; recoil_scale=2; 64Hz ticks.";
+   meta["deterministic_recoil_state_directly_read"]=true;
+   meta["ballistic_trajectory_directly_read"]=false;meta["server_spread_included"]=false;
+   meta["capture_mode"]=expectedAmc==null?"DIRECT_INTERNAL_RECOIL":"AMC_EXECUTION_TEST";
+   meta["amc_generated"]=false;meta["conversion_assumptions"]="m_pitch=m_yaw=0.022; recoil_scale=2; 64Hz base ticks; fitted 1/128-second state integration; server spread excluded.";
    meta["result"]=result;
    if(expectedAmc!=null) {
     try {

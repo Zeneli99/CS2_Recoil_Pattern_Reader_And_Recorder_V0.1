@@ -315,8 +315,10 @@ internal static class CoreChecks {
    if(quantize){actualX=Math.Round(actualX);actualY=Math.Round(actualY);}
    double yaw=179.5-actualX*1.25*0.022;
    if(yaw>180)yaw-=360;if(yaw< -180)yaw+=360;
+   Vector measured=new Vector {pitch=(float)(10+actualY*1.25*0.022),yaw=(float)yaw,roll=0};
    samples.Add(new Sample {observed_ms=at,left_down=at>=0&&at<end,
-    eye_angle=new Vector {pitch=(float)(10+actualY*1.25*0.022),yaw=(float)yaw,roll=0}});
+    eye_angle=new Vector {pitch=measured.pitch,yaw=measured.yaw,roll=0},
+    input_angle=measured});
   }
   return samples;
  }
@@ -339,6 +341,8 @@ internal static class CoreChecks {
    "Complete execution has a small measured residual under the declared input-angle assumptions");
   Check(!result.InstantaneousBulletRecoilVerified&&!result.RawMouseCountsDirectlyRead,
    "Execution fit never claims direct raw-input or bullet-direction verification");
+  Check(result.AngleSource=="C_BasePlayerPawn.v_angle",
+   "AMC execution comparison prefers the directly sampled player input angle");
   Check(result.ExpectedAnchors.Count==9&&result.ExpectedReleaseMs==2500&&result.AntiRepeatMs==30000&&
    result.Trace.Count>100&&result.SamplesCompared==samples.Count&&result.MedianObservationGapMs==2,
    "Execution report retains the selected AMC timeline and measured comparison trace");
@@ -387,6 +391,33 @@ internal static class CoreChecks {
     "Leaving AMC test restores the regular recorder controls");
   }
  }
+ private static void RecoilDynamicsChecks() {
+  const double exponential=8.6,linear=19.2,velocityDecay=3.6;
+  List<RecoilPoint> points=new List<RecoilPoint>();
+  RecoilPoint first=new RecoilPoint {Tick=1000,ObservedMs=0,Pitch=0,Yaw=0,
+   PitchVelocity= -20,YawVelocity= -10,Shot=1};
+  points.Add(first);
+  for(int shot=2;shot<=20;shot++) {
+   RecoilPoint previous=points[points.Count-1];double pitch,yaw;
+   RecoilDynamics.EvaluateRaw(previous,0.1,exponential,linear,velocityDecay,out pitch,out yaw);
+   points.Add(new RecoilPoint {Tick=previous.Tick+6.4,ObservedMs=(shot-1)*100,
+    Pitch=pitch,Yaw=yaw,PitchVelocity= -18-shot*1.7+(shot%3)*4.2,
+    YawVelocity= -12+shot*0.9-(shot%4)*3.1,Shot=shot});
+  }
+  RecoilDynamicsFit fit=RecoilDynamics.Fit(points);
+  Check(Math.Abs(fit.ExponentialDecayPerSecond-exponential)<0.03&&
+   Math.Abs(fit.LinearDecayDegreesPerSecond-linear)<0.05&&
+   Math.Abs(fit.VelocityDecayPerSecond-velocityDecay)<0.04,
+   "Internal recoil-state fit recovers known angle and velocity dynamics");
+  Check(fit.RootMeanSquareResidualDegrees<0.0005&&fit.MaximumResidualDegrees<0.001,
+   "Internal recoil-state fit retains a sub-millidegree synthetic residual");
+  double startPitch,startYaw,endPitch,endYaw;
+  RecoilDynamics.EvaluateCorrected(points[4],points[5],0,fit,out startPitch,out startYaw);
+  RecoilDynamics.EvaluateCorrected(points[4],points[5],1,fit,out endPitch,out endYaw);
+  Check(Math.Abs(startPitch-points[4].Pitch)<0.0000001&&Math.Abs(startYaw-points[4].Yaw)<0.0000001&&
+   Math.Abs(endPitch-points[5].Pitch)<0.0000001&&Math.Abs(endYaw-points[5].Yaw)<0.0000001,
+   "Dynamics replay keeps both recorded shot anchors exact");
+ }
  private static void ObservedReleaseChecks(RecordingData legacy,string output) {
   RecordingData released=RecordingData.FromSamples(new List<Sample>(legacy.Samples),
    new Dictionary<string,object>(legacy.Metadata));
@@ -414,6 +445,7 @@ internal static class CoreChecks {
    Directory.CreateDirectory(output);
    Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
    StartupDiagnostics(output);
+   RecoilDynamicsChecks();
    string csv=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.csv"));
    string json=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.json"));
    RecordingData legacy=RecordingIO.Parse(csv,json);
@@ -424,12 +456,21 @@ internal static class CoreChecks {
    Check(stats.Shots==30&&stats.MissedShotUpdates==0,"Recorder no longer reports 31 shots after rollback");
    AmcResult result=AmcConverter.Convert(legacy,Path.Combine(output,"AK47_FIXTURE_TEST.amc"),1.25);
    Timeline timeline=ParseAmc(result.AmcPath);
-   Check(result.Shots==30&&result.MoveCommands>58&&result.MoveCommands<=290&&result.SmoothingStepMs==10,
-    "Moderate smoothing subdivides AK movement without generating 1ms steps");
+   Check(result.Shots==30&&result.MoveCommands>58&&result.MoveCommands<=400&&result.SmoothingStepMs==10,
+    "Internal recoil dynamics emit moderate movement without generating 1ms steps");
+   Check(result.Dynamics!=null&&result.DeterministicRecoilStateDirectlyRead&&
+    !result.BallisticTrajectoryDirectlyRead&&!result.ServerSpreadIncluded&&
+    result.SourceKind=="CS2_INTERNAL_RECOIL_STATE",
+    "Report distinguishes direct deterministic recoil state from server trajectory and spread");
+   Check(Math.Abs(result.Dynamics.ExponentialDecayPerSecond-8.582)<0.03&&
+    Math.Abs(result.Dynamics.LinearDecayDegreesPerSecond-19.223)<0.05&&
+    Math.Abs(result.Dynamics.VelocityDecayPerSecond-3.595)<0.03&&
+    result.Dynamics.RootMeanSquareResidualDegrees<0.003&&result.Dynamics.MaximumResidualDegrees<0.012,
+    "Recorded AK fixture produces a precise self-fitted internal recoil model");
    Check(timeline.X==-130&&timeline.Y==363,"Recorded AK geometry retains -130,+363 endpoint");
-   Check(timeline.Release==3006&&timeline.Moves[0][0]>=16&&timeline.Moves[0][0]<=36&&
+   Check(timeline.Release==3006&&timeline.Moves[0][0]>=6&&timeline.Moves[0][0]<=40&&
     timeline.Moves[timeline.Moves.Count-1][0]==2906,
-    "Smaller steps preserve the 2906ms last anchor and 3006ms release");
+    "Internal replay preserves the 2906ms last anchor and 3006ms release");
    bool timing=true;
    for(int i=1;i<timeline.Moves.Count;i++)timing&=timeline.Moves[i][0]-timeline.Moves[i-1][0]>=5;
    Check(timing,"AK movement remains moderately spaced rather than 1ms micro steps");
@@ -440,30 +481,29 @@ internal static class CoreChecks {
     anchors&=Math.Abs(x-p.Yaw*2/(1.25*0.022))<=0.500001&&Math.Abs(y+p.Pitch*2/(1.25*0.022))<=0.500001;
    }
    Check(anchors,"Every measured shot anchor is within half a mouse count");
-   bool midpoints=true,directions=true,linear=true;
+   bool monotonic=true,nonLinear=false;
    for(int i=1;i<points.Count;i++) {
     RecoilPoint a=points[i-1],b=points[i];
-    int middle=(int)Math.Round(points[0].ObservedMs+((a.Tick+b.Tick)/2-points[0].Tick)*15.625,
+    int from=(int)Math.Round(points[0].ObservedMs+(a.Tick-points[0].Tick)*15.625,
      MidpointRounding.AwayFromZero);
-    int mx=0,my=0;foreach(int[] move in timeline.Moves)if(move[0]<=middle){mx=move[1];my=move[2];}
-    midpoints&=mx==(int)Math.Round((a.Yaw+b.Yaw)/(1.25*0.022),MidpointRounding.AwayFromZero)&&
-     my==(int)Math.Round(-(a.Pitch+b.Pitch)/(1.25*0.022),MidpointRounding.AwayFromZero);
-    int from=(int)Math.Round(points[0].ObservedMs+(a.Tick-points[0].Tick)*15.625,MidpointRounding.AwayFromZero);
-    int to=(int)Math.Round(points[0].ObservedMs+(b.Tick-points[0].Tick)*15.625,MidpointRounding.AwayFromZero);
-    int px=0,py=0;foreach(int[] move in timeline.Moves) {
-     if(move[0]<=from){px=move[1];py=move[2];continue;}
-     if(move[0]>to)break;
-     directions&=(b.Yaw>=a.Yaw?move[1]>=px:move[1]<=px)&&
-      (b.Pitch<=a.Pitch?move[2]>=py:move[2]<=py);
-     double f=(move[0]-from)/(double)(to-from);
-     linear&=Math.Abs(move[1]-(a.Yaw+(b.Yaw-a.Yaw)*f)*2/(1.25*0.022))<0.55&&
-      Math.Abs(move[2]+(a.Pitch+(b.Pitch-a.Pitch)*f)*2/(1.25*0.022))<0.55;
-     px=move[1];py=move[2];
+    int to=(int)Math.Round(points[0].ObservedMs+(b.Tick-points[0].Tick)*15.625,
+     MidpointRounding.AwayFromZero);
+    int previousX=(int)Math.Round(a.Yaw*2/(1.25*0.022),MidpointRounding.AwayFromZero);
+    int previousY=(int)Math.Round(-a.Pitch*2/(1.25*0.022),MidpointRounding.AwayFromZero);
+    foreach(int[] move in timeline.Moves) {
+     if(move[0]<=from||move[0]>to)continue;
+     monotonic&=(b.Yaw>=a.Yaw?move[1]>=previousX:move[1]<=previousX)&&
+      (b.Pitch<=a.Pitch?move[2]>=previousY:move[2]<=previousY);
+     double fraction=(move[0]-from)/(double)(to-from);
+     int linearX=(int)Math.Round((a.Yaw+(b.Yaw-a.Yaw)*fraction)*2/(1.25*0.022),
+      MidpointRounding.AwayFromZero);
+     int linearY=(int)Math.Round(-(a.Pitch+(b.Pitch-a.Pitch)*fraction)*2/(1.25*0.022),
+      MidpointRounding.AwayFromZero);
+     nonLinear|=move[1]!=linearX||move[2]!=linearY;previousX=move[1];previousY=move[2];
     }
    }
-   Check(midpoints,"Every old midpoint anchor retains its exact rounded cumulative position and time");
-   Check(directions,"Smoothing retains every interval direction including horizontal and vertical reversals");
-   Check(linear,"Inserted AK steps stay within rounding tolerance of the original linear path");
+   Check(monotonic,"Each shot interval is monotonic and cannot reintroduce small up/down or left/right shakes");
+   Check(nonLinear,"Intermediate AMC positions use the fitted recoil dynamics instead of the old straight line");
    AmcSmoothingChecks(output);
    ExecutionChecks(output);
    ObservedReleaseChecks(legacy,output);
@@ -508,8 +548,9 @@ internal static class CoreChecks {
    string roundtrip=Path.Combine(output,"AUTOMATIC.csv");RecordingIO.WriteCsv(roundtrip,automatic.Samples);
    RecordingIO.WriteJson(Path.ChangeExtension(roundtrip,".json"),automatic.Metadata);
    RecordingData read=RecordingIO.Load(roundtrip);
-   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2.4 CSV/JSON identity roundtrip");
-   Check(File.ReadAllLines(roundtrip)[0].Split(',').Length==34,"New CSV includes all seven identity/settings fields");
+   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2.5 direct-state CSV/JSON identity roundtrip");
+   Check(File.ReadAllLines(roundtrip)[0].Split(',').Length==45,
+    "New CSV includes input, camera and weapon recoil state in addition to identity/settings fields");
    automatic.Metadata["weapon_definition_index"]=16;
    Reject(delegate{automatic.ResolveMetadata();},"Disagreement between CSV and JSON weapon rejected");
    automatic.Metadata["weapon_definition_index"]=7;

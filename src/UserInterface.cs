@@ -50,9 +50,9 @@ namespace RecoilProbe {
   private System.Windows.Forms.Timer monitor;
   private const int HotkeyId=8118;
   internal MainForm() {
-   Ui.Style(this,"CS2 RECOIL RECORDER · V0.2.4");Ui.Title(this,"CS2 RECOIL RECORDER");
-   Ui.Label(this,"V0.2.4",485,25,45,24);
-   Button page=Ui.Button(this,"RECORDER",20,54,145,29);page.Enabled=false;
+   Ui.Style(this,"CS2 RECOIL INTERNO · V0.2.5");Ui.Title(this,"CS2 RECOIL INTERNO");
+   Ui.Label(this,"V0.2.5",485,25,45,24);
+   Button page=Ui.Button(this,"RECOIL INTERNO",20,54,145,29);page.Enabled=false;
    convert=Ui.Button(this,"CONVERTER",180,54,145,29);
    convert.Click+=delegate{using(ConverterForm form=new ConverterForm())form.ShowDialog(this);};
    report=Ui.Button(this,"REPORT",365,54,155,29);
@@ -183,7 +183,7 @@ namespace RecoilProbe {
   private AmcInput amc;
   private bool busy;
   internal ConverterForm() {
-   Ui.Style(this,"CS2 AMC CONVERTER · V0.2.4");Ui.Title(this,"AMC CONVERTER");
+   Ui.Style(this,"CS2 AMC CONVERTER · V0.2.5");Ui.Title(this,"AMC CONVERTER");
    Ui.Label(this,"Apri AMC / ZIP / CSV / JSON · oppure trascina un file.",20,55,500,24);
    source=Ui.Text(this,"Nessuna registrazione caricata",20,87,375,true);
    load=Ui.Button(this,"APRI FILE",410,85,110,29);load.Click+=delegate{Choose();};

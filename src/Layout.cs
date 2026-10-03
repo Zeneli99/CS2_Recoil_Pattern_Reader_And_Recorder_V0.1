@@ -19,9 +19,17 @@ namespace RecoilProbe {
   internal const int ItemView = 0x50;
   internal const int ItemDefinitionIndex = 0x1BA;
   internal const int Scoped = 0x1EA0;
+  internal const int CameraServices = 0x1328;
+  internal const int InputViewAngle = 0x13A8;
+  internal const int CameraViewPunchAngle = 0x48;
+  internal const int CameraViewPunchTick = 0x54;
+  internal const int CameraViewPunchTickRatio = 0x58;
   internal const int PawnMouseSensitivity = 0x14A0;
   internal const int FovSensitivityAdjust = 0x149C;
   internal const int WeaponClip = 0x1928;
+  internal const int WeaponRecoilIndex = 0x1A24;
+  internal const int WeaponRecoilIndexFloat = 0x1A28;
+  internal const int WeaponLastShotTime = 0x1B68;
   internal const int LocalPawn = 0x2560698;
   internal const int LocalController = 0x2538008;
   internal const int ViewAngles = 0x25767E8;
