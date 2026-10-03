@@ -379,16 +379,16 @@ internal static class CoreChecks {
   Reject(delegate{AmcExecutionCheck.ValidateIdentity(macro,equipped);},
    "Scoped execution cannot be compared against an unscoped AMC");
   Environment.SetEnvironmentVariable("CS2_PROBE_TEST_MODE","1");
-  using(MainForm form=new MainForm()) {
+  using(RecorderForm form=new RecorderForm()) {
    System.Reflection.BindingFlags flags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
-   System.Reflection.MethodInfo mode=typeof(MainForm).GetMethod("SetExecutionTest",flags);
+   System.Reflection.MethodInfo mode=typeof(RecorderForm).GetMethod("SetExecutionTest",flags);
    mode.Invoke(form,new object[] {macro});
-   Check(((Button)typeof(MainForm).GetField("record",flags).GetValue(form)).Text=="PROVA AMC · F8"&&
-    !((CheckBox)typeof(MainForm).GetField("autoAmc",flags).GetValue(form)).Enabled,
+   Check(((Button)typeof(RecorderForm).GetField("record",flags).GetValue(form)).Text=="PROVA AMC · F8"&&
+    !((CheckBox)typeof(RecorderForm).GetField("autoAmc",flags).GetValue(form)).Enabled,
     "Test mode identifies F8 as an AMC test and disables automatic recoil export");
    mode.Invoke(form,new object[] {null});
-   Check(((CheckBox)typeof(MainForm).GetField("autoAmc",flags).GetValue(form)).Enabled&&
-    ((Button)typeof(MainForm).GetField("record",flags).GetValue(form)).Text=="ARMA / FERMA · F8",
+   Check(((CheckBox)typeof(RecorderForm).GetField("autoAmc",flags).GetValue(form)).Enabled&&
+    ((Button)typeof(RecorderForm).GetField("record",flags).GetValue(form)).Text=="ARMA / FERMA · F8",
     "Leaving AMC test restores the regular recorder controls");
   }
  }
