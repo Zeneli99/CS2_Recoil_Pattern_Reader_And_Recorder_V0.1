@@ -92,7 +92,7 @@ namespace RecoilProbe {
    result.MetadataPath=Path.Combine(directory,name+".json");
    RecordingIO.WriteCsv(result.CsvPath,samples);
    Dictionary<string,object> meta=new Dictionary<string,object>();
-   meta["tool"]="CS2 Recoil Probe 0.2.1";meta["source_commit"]=Layout.SourceCommit;
+   meta["tool"]="CS2 Recoil Probe 0.2.2";meta["source_commit"]=Layout.SourceCommit;
    meta["target_build"]=Layout.TargetBuild;meta["observed_build"]=game.Build;
    meta["client_file_version"]=game.ClientVersion;meta["engine_file_version"]=game.EngineVersion;
    meta["weapon_detected"]=info.WeaponName;meta["weapon_definition_index"]=info.ItemDefinitionIndex;

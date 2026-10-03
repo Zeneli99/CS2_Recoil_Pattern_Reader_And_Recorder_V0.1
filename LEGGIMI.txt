@@ -1,6 +1,6 @@
-CS2 RECOIL READER & RECORDER V0.2.1
+CS2 RECOIL READER & RECORDER V0.2.2
 
-Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.1.exe.
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.2.exe.
 Arma equipaggiata e sensibilita' vengono lette automaticamente dal gioco.
 
 REGISTRARE
@@ -53,9 +53,17 @@ Non esegue CS2: le nuove letture automatiche e la precisione nel gioco restano d
 
 
 SE IL RECORDER NON PARTE
-V0.2.1 distingue i campi che non riesce a leggere.
+V0.2.2 distingue i campi che non riesce a leggere.
 Apri una mappa locale, equipaggia l'arma e premi F8.
 Se compare un errore, premi REPORT: si apre Diagnostica_CS2.txt.
 Il report resta sul PC; non viene inviato automaticamente.
 L'auto-rilevamento non richiede più i servizi del recoil.
 La registrazione continua a richiedere tutti i dati del recoil: non inventa valori mancanti.
+
+CORREZIONE V0.2.2
+Il report ha identificato il puntatore della lista entita' come 0x1.
+Il riconoscimento usa adesso i collegamenti delle identita' a partire dal pawn locale.
+Confronta il riferimento completo dell'arma attiva (indice + seriale), ID e nome designer.
+Non dipende piu' dal globale dwEntityList errato.
+La ricerca e' limitata, controlla i collegamenti e non si blocca su un ciclo.
+Se un altro campo fallisce, REPORT continua a salvare la diagnostica.

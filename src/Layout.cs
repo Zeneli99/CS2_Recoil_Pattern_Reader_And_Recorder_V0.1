@@ -4,7 +4,11 @@ namespace RecoilProbe {
  internal static class Layout {
   internal const int TargetBuild = 14188;
   internal const string SourceCommit = "2d204b1400eb08accfb4098ad954602448dacb07";
-  internal const int EntityList = 0x2715828;
+  // The dump global dwEntityList reads 0x1 in the tested 14188 session; use pawn identity links.
+  internal const int EntityPrevious = 0x50;
+  internal const int EntityNext = 0x58;
+  internal const int EntityFlags = 0x30;
+  internal const int EntityReferenceHandle = 0x10;
   internal const int Sensitivity = 0x255D998;
   internal const int SensitivityValue = 0x58;
   internal const int WeaponServices = 0x12F0;

@@ -71,6 +71,16 @@ internal static class CoreChecks {
   try{action();}catch(MemoryFieldException ex){return ex;}
   throw new Exception("Expected a named memory-field failure.");
  }
+ private static void SetupIdentity(IntPtr address,IntPtr entity,uint handle,
+  IntPtr previous,IntPtr next,uint flags) {
+  Marshal.Copy(new byte[0x70],0,address,0x70);
+  Marshal.WriteIntPtr(address,0,entity);
+  Marshal.WriteInt32(address,Layout.EntityReferenceHandle,
+   unchecked((int)(handle+((flags&1U)<<15))));
+  Marshal.WriteInt32(address,Layout.EntityFlags,unchecked((int)flags));
+  Marshal.WriteIntPtr(address,Layout.EntityPrevious,previous);
+  Marshal.WriteIntPtr(address,Layout.EntityNext,next);
+ }
  private static void StartupDiagnostics(string output) {
   List<IntPtr> allocations=new List<IntPtr>();
   try {
@@ -78,21 +88,21 @@ internal static class CoreChecks {
    IntPtr weapons=Allocate(allocations,0x100),sensitivity=Allocate(allocations,0x100);
    IntPtr engine=Allocate(allocations,0x920000),network=Allocate(allocations,0x400);
    IntPtr rules=Allocate(allocations,0x200);
-   IntPtr list=Allocate(allocations,0x300),chunk=Allocate(allocations,512*0x70);
+   IntPtr root=Allocate(allocations,0x70),decoy=Allocate(allocations,0x70),target=Allocate(allocations,0x70);
    IntPtr weapon=Allocate(allocations,0x2000),name=Marshal.StringToHGlobalAnsi("weapon_ak47");
    allocations.Add(name);
-   const int index=1200,slot=0x70*(index&0x1FF);
-   uint handle=(3U<<15)|index;
+   const uint handle=(3U<<15)|1200U,wrongSerial=(6U<<15)|1200U;
+   SetupIdentity(root,pawn,(2U<<15)|65U,IntPtr.Zero,decoy,0);
+   SetupIdentity(decoy,IntPtr.Zero,wrongSerial,root,target,0);
+   SetupIdentity(target,weapon,handle,decoy,IntPtr.Zero,1);
+   Marshal.WriteIntPtr(pawn,Layout.EntityIdentity,root);
    Marshal.WriteIntPtr(pawn,Layout.WeaponServices,weapons);
    Marshal.WriteInt32(weapons,Layout.ActiveWeapon,unchecked((int)handle));
    Marshal.WriteIntPtr(client,Layout.Sensitivity,sensitivity);
-   Marshal.WriteIntPtr(client,Layout.EntityList,list);
-   Marshal.WriteIntPtr(list,0x10+8*(index>>9),chunk);
-   Marshal.WriteIntPtr(chunk,slot,weapon);
-   Marshal.WriteInt32(chunk,slot+0x10,unchecked((int)(handle+(1U<<15))));
-   Marshal.WriteInt32(chunk,slot+0x30,1);
-   Marshal.WriteIntPtr(chunk,slot+Layout.DesignerName,name);
-   Marshal.WriteIntPtr(weapon,Layout.EntityIdentity,IntPtr.Add(chunk,slot));
+   // Reproduce the reported dump-global failure without using any user process addresses.
+   Marshal.WriteInt64(client,0x2715828,1L);
+   Marshal.WriteIntPtr(target,Layout.DesignerName,name);
+   Marshal.WriteIntPtr(weapon,Layout.EntityIdentity,target);
    Marshal.WriteInt16(weapon,Layout.AttributeManager+Layout.ItemView+Layout.ItemDefinitionIndex,7);
    Marshal.WriteInt32(weapon,Layout.WeaponClip,30);
    PutFloat(sensitivity,Layout.SensitivityValue,1.234567F);
@@ -102,9 +112,38 @@ internal static class CoreChecks {
    using(ReadMemory memory=new ReadMemory(pid)) {
     GameIdentity info=IdentityReader.Read(memory,client.ToInt64(),pawn.ToInt64(),null);
     Check(info.WeaponName=="AK47"&&info.ItemDefinitionIndex==7&&info.DesignerName=="weapon_ak47"&&info.Ammo==30,
-     "Native identity chain reads a test-owned weapon through a non-first entity chunk");
+     "Weapon detection succeeds when the old entity-list global reads 0x1");
+    Check(info.WeaponAddress==weapon.ToInt64(),"Same entity index with another serial is skipped");
     Check(info.WeaponHandle==handle,"Entity reference validates serial with the invalid-handle flag adjustment");
     Check(info.Sensitivity==1.234567F,"Native sensitivity read preserves the original float precision");
+    Marshal.WriteIntPtr(root,Layout.EntityNext,IntPtr.Zero);
+    Marshal.WriteIntPtr(root,Layout.EntityPrevious,target);
+    Marshal.WriteIntPtr(target,Layout.EntityPrevious,IntPtr.Zero);
+    Marshal.WriteIntPtr(target,Layout.EntityNext,root);
+    Check(IdentityReader.Resolve(memory,pawn.ToInt64(),handle)==weapon.ToInt64(),
+     "An active weapon before the pawn is found through the previous identity links");
+    Marshal.WriteIntPtr(root,Layout.EntityPrevious,IntPtr.Zero);
+    Marshal.WriteIntPtr(root,Layout.EntityNext,decoy);
+    Marshal.WriteIntPtr(target,Layout.EntityPrevious,decoy);
+    Marshal.WriteIntPtr(target,Layout.EntityNext,IntPtr.Zero);
+    Marshal.WriteInt32(target,Layout.EntityReferenceHandle,unchecked((int)(wrongSerial+(1U<<15))));
+    Reject(delegate{IdentityReader.Read(memory,client.ToInt64(),pawn.ToInt64(),info);},
+     "A cached weapon with a recycled reference is rejected");
+    Reject(delegate{IdentityReader.Resolve(memory,pawn.ToInt64(),handle);},
+     "No entity with the full active handle produces an explicit lookup failure");
+    Marshal.WriteInt32(target,Layout.EntityReferenceHandle,unchecked((int)(handle+(1U<<15))));
+    Marshal.WriteIntPtr(target,Layout.EntityPrevious,root);
+    Reject(delegate{IdentityReader.Resolve(memory,pawn.ToInt64(),handle);},
+     "An inconsistent previous/next link is rejected instead of selecting an arbitrary weapon");
+    Marshal.WriteIntPtr(target,Layout.EntityPrevious,decoy);
+    Marshal.WriteIntPtr(root,Layout.EntityPrevious,decoy);
+    Marshal.WriteIntPtr(decoy,Layout.EntityNext,root);
+    Stopwatch cycle=Stopwatch.StartNew();
+    Reject(delegate{IdentityReader.Resolve(memory,pawn.ToInt64(),handle);},
+     "A cyclic identity chain fails without hanging the recorder");
+    Check(cycle.ElapsedMilliseconds<1000,"Cycle detection exits before the lookup timeout");
+    Marshal.WriteIntPtr(root,Layout.EntityPrevious,IntPtr.Zero);
+    Marshal.WriteIntPtr(decoy,Layout.EntityNext,target);
     Marshal.WriteIntPtr(client,Layout.LocalPawn,pawn);
     Marshal.WriteIntPtr(engine,Layout.NetworkClient,network);
     Marshal.WriteInt32(network,Layout.SignOnState,6);
@@ -217,7 +256,7 @@ internal static class CoreChecks {
    string roundtrip=Path.Combine(output,"AUTOMATIC.csv");RecordingIO.WriteCsv(roundtrip,automatic.Samples);
    RecordingIO.WriteJson(Path.ChangeExtension(roundtrip,".json"),automatic.Metadata);
    RecordingData read=RecordingIO.Load(roundtrip);
-   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2.1 CSV/JSON identity roundtrip");
+   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2.2 CSV/JSON identity roundtrip");
    Check(File.ReadAllLines(roundtrip)[0].Split(',').Length==34,"New CSV includes all seven identity/settings fields");
    automatic.Metadata["weapon_definition_index"]=16;
    Reject(delegate{automatic.ResolveMetadata();},"Disagreement between CSV and JSON weapon rejected");

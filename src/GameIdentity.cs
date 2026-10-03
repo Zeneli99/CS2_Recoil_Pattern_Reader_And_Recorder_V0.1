@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Diagnostics;
 using System.Text;
 
 namespace RecoilProbe {
@@ -33,7 +34,7 @@ namespace RecoilProbe {
   }
  }
  internal static class IdentityReader {
-  internal const int EntityStride = 0x70;
+  internal const int MaximumEntityLookup = 32768;
   internal const int EntryMask = 0x7FFF;
   internal static bool ValidSensitivity(double value) {
    return !Double.IsNaN(value) && !Double.IsInfinity(value) && value >= 0.0001 && value <= 100;
@@ -48,21 +49,55 @@ namespace RecoilProbe {
    }
    throw new InvalidOperationException("Nome arma troppo lungo.");
   }
-  internal static long Resolve(ReadMemory memory, long list, uint handle) {
-   if (handle == 0xFFFFFFFF || (handle & EntryMask) == 0)
-    throw new InvalidOperationException("Nessuna arma attiva.");
-   int index = (int)(handle & EntryMask);
-   long chunk = memory.NamedPointer(list + 0x10 + 8L * (index >> 9),"Blocco della lista entita\'");
-   long identity = chunk + EntityStride * (index & 0x1FF);
-   long entity = memory.NamedPointer(identity,"Entita\' dell\'arma attiva");
-   if (memory.NamedPointer(entity + Layout.EntityIdentity,"Identita\' dell\'arma") != identity)
-    throw new InvalidOperationException("Identita' dell'arma non coerente con la lista entita'.");
-   uint stored = BitConverter.ToUInt32(memory.Bytes(identity + 0x10, 4), 0);
-   uint flags = BitConverter.ToUInt32(memory.Bytes(identity + 0x30, 4), 0);
-   uint reference = unchecked(stored - ((flags & 1U) << 15));
-   if (reference != handle)
-    throw new InvalidOperationException("Handle dell'arma scaduto. Riprova quando l'arma e' equipaggiata.");
+  private static uint Reference(byte[] identity) {
+   uint stored=BitConverter.ToUInt32(identity,Layout.EntityReferenceHandle);
+   uint flags=BitConverter.ToUInt32(identity,Layout.EntityFlags);
+   return unchecked(stored-((flags&1U)<<15));
+  }
+  private static byte[] ReadNode(ReadMemory memory,long address) {
+   try{return memory.Bytes(address,Layout.EntityNext+8);}
+   catch(Exception ex){throw new MemoryFieldException("Catena delle identita' entita'",address,null,ex);}
+  }
+  private static long Match(ReadMemory memory,long address,byte[] node,uint handle) {
+   if(Reference(node)!=handle)return 0;
+   long entity=BitConverter.ToInt64(node,0);
+   if(entity<0x10000||entity>0x00007FFFFFFFFFFF)
+    throw new MemoryFieldException("Entita' dell'arma attiva",address,entity,null);
+   if(memory.NamedPointer(entity+Layout.EntityIdentity,"Identita' dell'arma")!=address)
+    throw new InvalidOperationException("Identita' dell'arma non coerente con il suo riferimento.");
    return entity;
+  }
+  internal static long Resolve(ReadMemory memory,long pawn,uint handle) {
+   if(handle==0xFFFFFFFF||(handle&EntryMask)==0)
+    throw new InvalidOperationException("Nessuna arma attiva.");
+   long root=memory.NamedPointer(pawn+Layout.EntityIdentity,"Identita' del giocatore locale");
+   byte[] first=ReadNode(memory,root);
+   if(BitConverter.ToInt64(first,0)!=pawn)
+    throw new InvalidOperationException("Identita' del giocatore locale non coerente.");
+   long match=Match(memory,root,first,handle);if(match!=0)return match;
+   HashSet<long> visited=new HashSet<long>();visited.Add(root);
+   Stopwatch duration=Stopwatch.StartNew();
+   foreach(bool forward in new bool[]{true,false}) {
+    int nextField=forward?Layout.EntityNext:Layout.EntityPrevious;
+    int oppositeField=forward?Layout.EntityPrevious:Layout.EntityNext;
+    long previous=root,current=BitConverter.ToInt64(first,nextField);
+    while(current!=0 && !visited.Contains(current)) {
+     if(visited.Count>=MaximumEntityLookup||duration.ElapsedMilliseconds>2000)
+      throw new InvalidOperationException("Riconoscimento arma interrotto: elenco entita' non stabile.");
+     visited.Add(current);byte[] node=ReadNode(memory,current);
+     if(BitConverter.ToInt64(node,oppositeField)!=previous)
+      throw new InvalidOperationException("Elenco entita' cambiato durante il riconoscimento. Riprova.");
+     match=Match(memory,current,node,handle);if(match!=0)return match;
+     previous=current;current=BitConverter.ToInt64(node,nextField);
+    }
+   }
+   throw new InvalidOperationException("Arma attiva non trovata nella catena delle entita'. Riprova con l'arma equipaggiata.");
+  }
+  private static void VerifyCachedReference(ReadMemory memory,GameIdentity cached,uint handle) {
+   long identity=memory.NamedPointer(cached.WeaponAddress+Layout.EntityIdentity,"Identita' dell'arma");
+   byte[] node=ReadNode(memory,identity);
+   if(BitConverter.ToInt64(node,0)!=cached.WeaponAddress||Reference(node)!=handle)
+    throw new InvalidOperationException("Riferimento dell'arma non piu' valido. Ripeti la registrazione.");
   }
   internal static GameIdentity Read(ReadMemory memory, long client, long pawn, GameIdentity cached) {
    long services = memory.NamedPointer(pawn + Layout.WeaponServices,"Servizi delle armi");
@@ -71,11 +106,12 @@ namespace RecoilProbe {
    GameIdentity result = new GameIdentity();
    result.WeaponHandle = before;
    if (cached != null && cached.WeaponHandle == before) {
+    VerifyCachedReference(memory,cached,before);
     result.WeaponAddress = cached.WeaponAddress;
     result.ItemDefinitionIndex = cached.ItemDefinitionIndex;
     result.WeaponName = cached.WeaponName; result.DesignerName = cached.DesignerName;
    } else {
-    result.WeaponAddress = Resolve(memory, memory.NamedPointer(client + Layout.EntityList,"Lista entita\'"), before);
+    result.WeaponAddress = Resolve(memory,pawn,before);
     result.ItemDefinitionIndex = BitConverter.ToUInt16(memory.Bytes(result.WeaponAddress +
      Layout.AttributeManager + Layout.ItemView + Layout.ItemDefinitionIndex, 2), 0);
     result.WeaponName = WeaponCatalog.Name(result.ItemDefinitionIndex);
