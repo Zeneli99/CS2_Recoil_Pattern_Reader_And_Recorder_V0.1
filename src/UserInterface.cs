@@ -41,7 +41,7 @@ namespace RecoilProbe {
  internal sealed class MainForm : Form {
   private TextBox weapon,sensitivity,folder,log;
   private Label detected;
-  private Button record,open,convert,choose;
+  private Button record,open,convert,choose,report;
   private CheckBox autoAmc;
   private Recorder recorder;
   private Thread worker;
@@ -49,11 +49,15 @@ namespace RecoilProbe {
   private System.Windows.Forms.Timer monitor;
   private const int HotkeyId=8118;
   internal MainForm() {
-   Ui.Style(this,"CS2 RECOIL RECORDER · V0.2");Ui.Title(this,"CS2 RECOIL RECORDER");
-   Ui.Label(this,"V0.2",485,25,45,24);
+   Ui.Style(this,"CS2 RECOIL RECORDER · V0.2.1");Ui.Title(this,"CS2 RECOIL RECORDER");
+   Ui.Label(this,"V0.2.1",485,25,45,24);
    Button page=Ui.Button(this,"RECORDER",20,54,145,29);page.Enabled=false;
    convert=Ui.Button(this,"CONVERTER",180,54,145,29);
    convert.Click+=delegate{using(ConverterForm form=new ConverterForm())form.ShowDialog(this);};
+   report=Ui.Button(this,"REPORT",365,54,155,29);
+   report.Click+=delegate{
+    try{Diagnostics.Open();}catch(Exception ex){Status(ex.Message);}
+   };
    Ui.Label(this,"Arma · AUTO",20,96,230,21);Ui.Label(this,"Sensibilita' · AUTO",295,96,220,21);
    weapon=Ui.Text(this,"In attesa di CS2",20,120,250,true);
    sensitivity=Ui.Text(this,"AUTO",295,120,225,true);
@@ -92,8 +96,8 @@ namespace RecoilProbe {
    detecting=true;
    ThreadPool.QueueUserWorkItem(delegate(object ignored){
     GameIdentity info=null;string error=null;
-    try{using(Game game=new Game()){game.VerifySession();info=game.ReadIdentity();}}
-    catch(Exception ex){error=ex.Message;}
+    try{using(Game game=new Game(false)){game.VerifySession();info=game.ReadIdentity();}}
+    catch(Exception ex){error=ex.Message;Diagnostics.Record(ex);}
     Ui.Post(this,delegate{
      detecting=false;if(running||closing)return;
      if(info!=null) {
@@ -127,11 +131,11 @@ namespace RecoilProbe {
    record.Text="FERMA · F8";
    worker=new Thread(delegate(){
     CaptureResult result=null;string error=null;
-    try{result=recorder.Run();}catch(Exception ex){error=ex.Message;}
+    try{result=recorder.Run();}catch(Exception ex){error=ex.Message;Diagnostics.Record(ex);}
     Ui.Post(this,delegate{
      running=false;record.Enabled=true;record.Text="ARMA / FERMA · F8";folder.Enabled=true;
      autoAmc.Enabled=true;convert.Enabled=true;choose.Enabled=true;
-     if(error!=null)log.Text=error;
+     if(error!=null)log.Text=error+"\r\nPremi REPORT per aprire Diagnostica_CS2.txt.";
      else if(result==null)log.Text="Registrazione annullata prima del primo colpo.";
      else {
       log.Text=result.Shots+" colpi · "+result.Samples+" campioni · gap max "+
@@ -157,7 +161,7 @@ namespace RecoilProbe {
   private RecordingData data;
   private bool busy;
   internal ConverterForm() {
-   Ui.Style(this,"CS2 AMC CONVERTER · V0.2");Ui.Title(this,"AMC CONVERTER");
+   Ui.Style(this,"CS2 AMC CONVERTER · V0.2.1");Ui.Title(this,"AMC CONVERTER");
    Ui.Label(this,"Apri ZIP / CSV / JSON · oppure trascina una registrazione.",20,55,500,24);
    source=Ui.Text(this,"Nessuna registrazione caricata",20,87,375,true);
    load=Ui.Button(this,"APRI FILE",410,85,110,29);load.Click+=delegate{Choose();};

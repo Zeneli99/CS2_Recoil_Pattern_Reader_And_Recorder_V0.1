@@ -52,10 +52,10 @@ namespace RecoilProbe {
    if (handle == 0xFFFFFFFF || (handle & EntryMask) == 0)
     throw new InvalidOperationException("Nessuna arma attiva.");
    int index = (int)(handle & EntryMask);
-   long chunk = memory.Pointer(list + 0x10 + 8L * (index >> 9));
+   long chunk = memory.NamedPointer(list + 0x10 + 8L * (index >> 9),"Blocco della lista entita\'");
    long identity = chunk + EntityStride * (index & 0x1FF);
-   long entity = memory.Pointer(identity);
-   if (memory.Pointer(entity + Layout.EntityIdentity) != identity)
+   long entity = memory.NamedPointer(identity,"Entita\' dell\'arma attiva");
+   if (memory.NamedPointer(entity + Layout.EntityIdentity,"Identita\' dell\'arma") != identity)
     throw new InvalidOperationException("Identita' dell'arma non coerente con la lista entita'.");
    uint stored = BitConverter.ToUInt32(memory.Bytes(identity + 0x10, 4), 0);
    uint flags = BitConverter.ToUInt32(memory.Bytes(identity + 0x30, 4), 0);
@@ -65,9 +65,9 @@ namespace RecoilProbe {
    return entity;
   }
   internal static GameIdentity Read(ReadMemory memory, long client, long pawn, GameIdentity cached) {
-   long services = memory.Pointer(pawn + Layout.WeaponServices);
+   long services = memory.NamedPointer(pawn + Layout.WeaponServices,"Servizi delle armi");
    uint before = BitConverter.ToUInt32(memory.Bytes(services + Layout.ActiveWeapon, 4), 0);
-   long sensPointer = memory.Pointer(client + Layout.Sensitivity);
+   long sensPointer = memory.NamedPointer(client + Layout.Sensitivity,"Impostazione sensibilita\'");
    GameIdentity result = new GameIdentity();
    result.WeaponHandle = before;
    if (cached != null && cached.WeaponHandle == before) {
@@ -75,12 +75,12 @@ namespace RecoilProbe {
     result.ItemDefinitionIndex = cached.ItemDefinitionIndex;
     result.WeaponName = cached.WeaponName; result.DesignerName = cached.DesignerName;
    } else {
-    result.WeaponAddress = Resolve(memory, memory.Pointer(client + Layout.EntityList), before);
+    result.WeaponAddress = Resolve(memory, memory.NamedPointer(client + Layout.EntityList,"Lista entita\'"), before);
     result.ItemDefinitionIndex = BitConverter.ToUInt16(memory.Bytes(result.WeaponAddress +
      Layout.AttributeManager + Layout.ItemView + Layout.ItemDefinitionIndex, 2), 0);
     result.WeaponName = WeaponCatalog.Name(result.ItemDefinitionIndex);
-    long identity = memory.Pointer(result.WeaponAddress + Layout.EntityIdentity);
-    result.DesignerName = ReadName(memory, memory.Pointer(identity + Layout.DesignerName));
+    long identity = memory.NamedPointer(result.WeaponAddress + Layout.EntityIdentity,"Identita\' dell\'arma");
+    result.DesignerName = ReadName(memory, memory.NamedPointer(identity + Layout.DesignerName,"Nome dell\'arma"));
     if (!result.DesignerName.StartsWith("weapon_", StringComparison.Ordinal))
      throw new InvalidOperationException("L'entita' equipaggiata non e' un'arma.");
    }

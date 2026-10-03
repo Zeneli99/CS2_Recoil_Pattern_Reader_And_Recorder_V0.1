@@ -4,6 +4,9 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -58,11 +61,98 @@ internal static class CoreChecks {
    }
   }
  }
+ private static IntPtr Allocate(List<IntPtr> allocations,int size) {
+  IntPtr pointer=Marshal.AllocHGlobal(size);allocations.Add(pointer);return pointer;
+ }
+ private static void PutFloat(IntPtr pointer,int offset,float value) {
+  Marshal.Copy(BitConverter.GetBytes(value),0,IntPtr.Add(pointer,offset),4);
+ }
+ private static MemoryFieldException PointerFailure(Action action) {
+  try{action();}catch(MemoryFieldException ex){return ex;}
+  throw new Exception("Expected a named memory-field failure.");
+ }
+ private static void StartupDiagnostics(string output) {
+  List<IntPtr> allocations=new List<IntPtr>();
+  try {
+   IntPtr client=Allocate(allocations,0x2800000),pawn=Allocate(allocations,0x3000);
+   IntPtr weapons=Allocate(allocations,0x100),sensitivity=Allocate(allocations,0x100);
+   IntPtr engine=Allocate(allocations,0x920000),network=Allocate(allocations,0x400);
+   IntPtr rules=Allocate(allocations,0x200);
+   IntPtr list=Allocate(allocations,0x300),chunk=Allocate(allocations,512*0x70);
+   IntPtr weapon=Allocate(allocations,0x2000),name=Marshal.StringToHGlobalAnsi("weapon_ak47");
+   allocations.Add(name);
+   const int index=1200,slot=0x70*(index&0x1FF);
+   uint handle=(3U<<15)|index;
+   Marshal.WriteIntPtr(pawn,Layout.WeaponServices,weapons);
+   Marshal.WriteInt32(weapons,Layout.ActiveWeapon,unchecked((int)handle));
+   Marshal.WriteIntPtr(client,Layout.Sensitivity,sensitivity);
+   Marshal.WriteIntPtr(client,Layout.EntityList,list);
+   Marshal.WriteIntPtr(list,0x10+8*(index>>9),chunk);
+   Marshal.WriteIntPtr(chunk,slot,weapon);
+   Marshal.WriteInt32(chunk,slot+0x10,unchecked((int)(handle+(1U<<15))));
+   Marshal.WriteInt32(chunk,slot+0x30,1);
+   Marshal.WriteIntPtr(chunk,slot+Layout.DesignerName,name);
+   Marshal.WriteIntPtr(weapon,Layout.EntityIdentity,IntPtr.Add(chunk,slot));
+   Marshal.WriteInt16(weapon,Layout.AttributeManager+Layout.ItemView+Layout.ItemDefinitionIndex,7);
+   Marshal.WriteInt32(weapon,Layout.WeaponClip,30);
+   PutFloat(sensitivity,Layout.SensitivityValue,1.234567F);
+   PutFloat(pawn,Layout.PawnMouseSensitivity,1F);
+   PutFloat(pawn,Layout.FovSensitivityAdjust,1F);Marshal.WriteByte(pawn,Layout.Scoped,0);
+   int pid;using(Process self=Process.GetCurrentProcess()){pid=self.Id;}
+   using(ReadMemory memory=new ReadMemory(pid)) {
+    GameIdentity info=IdentityReader.Read(memory,client.ToInt64(),pawn.ToInt64(),null);
+    Check(info.WeaponName=="AK47"&&info.ItemDefinitionIndex==7&&info.DesignerName=="weapon_ak47"&&info.Ammo==30,
+     "Native identity chain reads a test-owned weapon through a non-first entity chunk");
+    Check(info.WeaponHandle==handle,"Entity reference validates serial with the invalid-handle flag adjustment");
+    Check(info.Sensitivity==1.234567F,"Native sensitivity read preserves the original float precision");
+    Marshal.WriteIntPtr(client,Layout.LocalPawn,pawn);
+    Marshal.WriteIntPtr(engine,Layout.NetworkClient,network);
+    Marshal.WriteInt32(network,Layout.SignOnState,6);
+    Marshal.WriteInt32(pawn,Layout.Health,100);Marshal.WriteByte(pawn,Layout.LifeState,0);
+    Marshal.WriteByte(rules,Layout.IsValveServer,0);
+    using(Process own=Process.GetCurrentProcess()) {
+     Game session=(Game)FormatterServices.GetUninitializedObject(typeof(Game));
+     session.Process=own;session.Memory=memory;session.Client=client.ToInt64();
+     session.Engine=engine.ToInt64();session.Pawn=pawn.ToInt64();session.Rules=rules.ToInt64();
+     session.Services=0;session.VerifySession();
+     Check(true,"Core session verification permits detection before recoil services are required");
+     Reject(delegate{session.Read();},"Recording still refuses absent recoil services instead of fabricating values");
+    }
+    Marshal.WriteIntPtr(client,Layout.Sensitivity,IntPtr.Zero);
+    MemoryFieldException settings=PointerFailure(delegate{
+     IdentityReader.Read(memory,client.ToInt64(),pawn.ToInt64(),null);
+    });
+    Check(settings.Field=="Impostazione sensibilita'"&&settings.Value==0&&
+     settings.Message.IndexOf("mappa",StringComparison.OrdinalIgnoreCase)<0,
+     "Null sensitivity is identified by field instead of claiming that no map is loaded");
+    Diagnostics.ReportDirectory=output;
+    Diagnostics.Record(settings,"Build letta: 14188; TEST PROCESS ONLY",memory.PointerTrace);
+    string diagnostic=File.ReadAllText(Diagnostics.LastPath);
+    Check(diagnostic.Contains("Impostazione sensibilita'")&&diagnostic.Contains("Valore: 0x0")&&
+     diagnostic.Contains("Build letta: 14188")&&diagnostic.Contains("PUNTATORI LETTI"),
+     "Startup report preserves the failed field, raw value, build and preceding reads");
+    Diagnostics.Record(settings);
+    Check(File.ReadAllText(Diagnostics.LastPath)==diagnostic,
+     "UI error handling does not replace the detailed startup report with a generic one");
+    Marshal.WriteIntPtr(pawn,Layout.WeaponServices,IntPtr.Zero);
+    MemoryFieldException services=PointerFailure(delegate{
+     IdentityReader.Read(memory,client.ToInt64(),pawn.ToInt64(),null);
+    });
+    Check(services.Field=="Servizi delle armi"&&services.Field!=settings.Field,
+     "Different null fields produce distinct useful startup messages");
+    MemoryFieldException unreadable=PointerFailure(delegate{memory.NamedPointer(0,"Campo inaccessibile");});
+    Check(!unreadable.Value.HasValue&&unreadable.InnerException!=null,
+     "Unreadable memory is distinguished from a successfully read null pointer");
+   }
+  } finally {foreach(IntPtr allocation in allocations)Marshal.FreeHGlobal(allocation);}
+ }
+
  [STAThread] private static int Main(string[] args) {
   try{
    if(args.Length!=2)throw new Exception("Usage: CoreChecks.exe FIXTURE_DIRECTORY OUTPUT_DIRECTORY");
    string fixtures=Path.GetFullPath(args[0]),output=Path.GetFullPath(args[1]);
    Directory.CreateDirectory(output);
+   StartupDiagnostics(output);
    string csv=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.csv"));
    string json=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.json"));
    RecordingData legacy=RecordingIO.Parse(csv,json);
@@ -127,7 +217,7 @@ internal static class CoreChecks {
    string roundtrip=Path.Combine(output,"AUTOMATIC.csv");RecordingIO.WriteCsv(roundtrip,automatic.Samples);
    RecordingIO.WriteJson(Path.ChangeExtension(roundtrip,".json"),automatic.Metadata);
    RecordingData read=RecordingIO.Load(roundtrip);
-   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2 CSV/JSON identity roundtrip");
+   Check(read.AutomaticIdentity&&read.Sensitivity==1.25&&read.WeaponName=="AK47","V0.2.1 CSV/JSON identity roundtrip");
    Check(File.ReadAllLines(roundtrip)[0].Split(',').Length==34,"New CSV includes all seven identity/settings fields");
    automatic.Metadata["weapon_definition_index"]=16;
    Reject(delegate{automatic.ResolveMetadata();},"Disagreement between CSV and JSON weapon rejected");

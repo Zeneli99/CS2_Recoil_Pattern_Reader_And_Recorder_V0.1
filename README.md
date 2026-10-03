@@ -1,10 +1,10 @@
-# CS2 Recoil Reader & Recorder V0.2
+# CS2 Recoil Reader & Recorder V0.2.1
 
 Windows x64. F8 arma il recorder; il sinistro delimita lo spray. Il programma legge automaticamente l'arma equipaggiata e la sensibilità dal gioco, salva CSV/JSON e può creare subito un AMC di prova.
 
 ## Uso
 
-1. Estrai il pacchetto completo e apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.exe.
+1. Estrai il pacchetto completo e apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.2.1.exe.
 2. Avvia CS2 con -insecure in una mappa di pratica locale.
 3. Arma e sensibilità compaiono automaticamente. F8, torna al gioco, attendi un secondo con il sinistro rilasciato e spara da recoil azzerato, senza muovere il mouse.
 4. Rilascia il sinistro. Con "Genera AMC automaticamente" attivo trovi la macro nella sottocartella Registrazioni/AMC.
@@ -41,9 +41,19 @@ Per ricompilare: powershell.exe -NoProfile -File .\build.ps1
 
 Le verifiche eseguono l'EXE, controllano la memoria del solo processo di test, i due layout, CSV/JSON, import ZIP, validazione degli errori, geometria/tempi e pausa dell'AMC. Una fixture contiene gli aggiornamenti selezionati dalla registrazione AK dell'utente, incluso il rollback; i campioni intermedi sono omessi e le colonne diagnostiche non necessarie al convertitore sono sintetiche.
 
-Il pacchetto include EXE, tutti i sorgenti, workflow, fixture, risultati delle verifiche, anteprime, SHA256 e AMC AK di esempio. Il workflow pubblica gli stessi file verificati in Downloads/V0.2 dopo i controlli, senza avviare un'altra build.
+Il pacchetto include EXE, tutti i sorgenti, workflow, fixture, risultati delle verifiche, anteprime, SHA256 e AMC AK di esempio. Il workflow pubblica gli stessi file verificati in Downloads/V0.2.1 dopo i controlli, senza avviare un'altra build.
 
 CS2 non viene eseguito in GitHub Actions. Le nuove letture automatiche dell'arma/sensibilità e la precisione della compensazione richiedono una prova reale.
 
 Fonte dei campi: a2x/cs2-dumper, snapshot 2d204b1400eb08accfb4098ad954602448dacb07, MIT (licenza inclusa). La struttura dell'handle mantiene l'indice e il seriale; i controlli di identità impediscono l'uso di riferimenti scaduti.
 
+
+## Diagnostica avvio V0.2.1
+
+La lettura di arma e sensibilità usa una sessione senza richiedere i servizi del recoil. Questi ultimi rimangono obbligatori per registrare: non vengono sostituiti con valori inventati.
+
+Gli errori di puntatore indicano ora il campo: giocatore/controller locale, regole della sessione, client della sessione, servizi delle armi, sensibilità, lista/blocco entità, identità/nome dell'arma e servizi del recoil. Il messaggio della V0.2 "entra prima in una mappa" veniva usato anche per i campi delle nuove funzioni e non consentiva di individuare il problema.
+
+Il pulsante REPORT apre Diagnostica_CS2.txt, salvato vicino all'EXE dopo un errore. Se quella cartella non è scrivibile, viene usata la cartella locale dell'applicazione. Il report contiene il campo fallito, l'indirizzo/valore letti, i puntatori precedenti, la build, le versioni DLL e lo stack dell'errore. Non trasmette il file e non salva password, token o contenuti arbitrari della memoria.
+
+La causa esatta della lettura fallita nella sessione dell'utente non è ancora verificata: serve il report della prova dal vivo. V0.2.1 è una build per identificare il problema e corregge il requisito non necessario dei servizi recoil durante il solo rilevamento automatico.

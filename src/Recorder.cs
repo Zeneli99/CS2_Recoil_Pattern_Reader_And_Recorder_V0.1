@@ -70,7 +70,10 @@ namespace RecoilProbe {
        if(s.observed_ms-pressTime>=20000 || samples.Count>=30000) {
         reason="Limite registrazione 20 secondi";break;
        }
-      } catch(Exception ex){reason="Lettura interrotta: "+ex.Message;break;}
+      } catch(Exception ex){
+       Diagnostics.Record(ex,"Lettura durante la registrazione",game.Memory.PointerTrace);
+       reason="Lettura interrotta: "+ex.Message;break;
+      }
       Thread.Sleep(1);
      }
      foreach(Sample s in samples)s.observed_ms-=pressTime;
@@ -89,7 +92,7 @@ namespace RecoilProbe {
    result.MetadataPath=Path.Combine(directory,name+".json");
    RecordingIO.WriteCsv(result.CsvPath,samples);
    Dictionary<string,object> meta=new Dictionary<string,object>();
-   meta["tool"]="CS2 Recoil Probe 0.2";meta["source_commit"]=Layout.SourceCommit;
+   meta["tool"]="CS2 Recoil Probe 0.2.1";meta["source_commit"]=Layout.SourceCommit;
    meta["target_build"]=Layout.TargetBuild;meta["observed_build"]=game.Build;
    meta["client_file_version"]=game.ClientVersion;meta["engine_file_version"]=game.EngineVersion;
    meta["weapon_detected"]=info.WeaponName;meta["weapon_definition_index"]=info.ItemDefinitionIndex;

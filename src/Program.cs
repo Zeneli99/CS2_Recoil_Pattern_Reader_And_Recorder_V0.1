@@ -12,8 +12,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: System.Reflection.AssemblyTitle("CS2 Recoil Probe")]
-[assembly: System.Reflection.AssemblyVersion("0.2.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.2.0.0")]
+[assembly: System.Reflection.AssemblyVersion("0.2.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.2.1.0")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("CoreChecks")]
 
 namespace RecoilProbe {
@@ -42,6 +42,9 @@ namespace RecoilProbe {
 
  internal sealed class ReadMemory : IDisposable {
   private IntPtr handle;
+  private readonly Dictionary<string,string> pointerTrace = new Dictionary<string,string>();
+  private readonly Dictionary<string,long> pointerValues = new Dictionary<string,long>();
+  internal string PointerTrace { get { return String.Join("\r\n",new List<string>(pointerTrace.Values).ToArray()); } }
   internal ReadMemory(int pid) {
    handle = Native.OpenProcess(Native.ReadOnlyRights, false, pid);
    if (handle == IntPtr.Zero)
@@ -58,10 +61,19 @@ namespace RecoilProbe {
     throw new InvalidOperationException("Lettura incompleta. Gioco chiuso, mappa cambiata o layout diverso.");
    return data;
   }
-  internal long Pointer(long at) {
-   long p = BitConverter.ToInt64(Bytes(at, 8), 0);
-   if (p < 0x10000 || p > 0x00007FFFFFFFFFFF)
-    throw new InvalidOperationException("Puntatore assente. Entra prima in una mappa.");
+  internal long Pointer(long at) { return NamedPointer(at,"Puntatore senza nome"); }
+  internal long NamedPointer(long at,string field) {
+   long p;
+   try {p=BitConverter.ToInt64(Bytes(at,8),0);}
+   catch(Exception ex) {throw new MemoryFieldException(field,at,null,ex);}
+   long previousValue;
+   if(!pointerValues.TryGetValue(field,out previousValue)||previousValue!=p) {
+    pointerValues[field]=p;
+    pointerTrace[field]=field+" @0x"+at.ToString("X",CultureInfo.InvariantCulture)+
+     " ->0x"+p.ToString("X",CultureInfo.InvariantCulture);
+   }
+   if(p<0x10000 || p>0x00007FFFFFFFFFFF)
+    throw new MemoryFieldException(field,at,p,null);
    return p;
   }
   internal int Int(long at) { return BitConverter.ToInt32(Bytes(at, 4), 0); }
@@ -106,7 +118,8 @@ namespace RecoilProbe {
    currentIdentity = IdentityReader.Read(Memory, Client, Pawn, currentIdentity);
    return currentIdentity;
   }
-  internal Game() {
+  internal Game() : this(true) { }
+  internal Game(bool requireRecoil) {
    Process[] list = System.Diagnostics.Process.GetProcessesByName("cs2");
    if (list.Length != 1) {
     foreach (Process p in list) p.Dispose();
@@ -141,15 +154,21 @@ namespace RecoilProbe {
     if (Build != Layout.TargetBuild)
      throw new InvalidOperationException("Build gioco " + Build + "; layout disponibile " +
       Layout.TargetBuild + ". Lettura interrotta: servono dati della stessa build.");
-    Pawn = Memory.Pointer(Client + Layout.LocalPawn);
-    Controller = Memory.Pointer(Client + Layout.LocalController);
-    Services = Memory.Pointer(Pawn + Layout.AimPunchServices);
-    Rules = Memory.Pointer(Client + Layout.GameRules);
+    Pawn = Memory.NamedPointer(Client + Layout.LocalPawn,"Giocatore locale");
+    Controller = Memory.NamedPointer(Client + Layout.LocalController,"Controller locale");
+    Rules = Memory.NamedPointer(Client + Layout.GameRules,"Regole della sessione");
     if (Memory.Byte(Controller + Layout.IsLocalController) != 1)
      throw new InvalidOperationException("Controller locale non validato.");
     VerifySession();
     ReadIdentity();
-   } catch { Dispose(); throw; }
+    if(requireRecoil) {
+     Services=Memory.NamedPointer(Pawn+Layout.AimPunchServices,"Servizi del recoil");
+     VerifySession();
+    }
+   } catch(Exception ex) {
+    Diagnostics.Record(ex,StartupContext(),Memory==null?null:Memory.PointerTrace);
+    Dispose();throw;
+   }
   }
   internal bool Foreground {
    get {
@@ -159,19 +178,20 @@ namespace RecoilProbe {
   }
   internal void VerifySession() {
    if (Process.HasExited) throw new InvalidOperationException("CS2 chiuso.");
-   if (Memory.Pointer(Client + Layout.LocalPawn) != Pawn ||
-    Memory.Pointer(Pawn + Layout.AimPunchServices) != Services)
+   if (Memory.NamedPointer(Client + Layout.LocalPawn,"Giocatore locale") != Pawn ||
+    (Services!=0 && Memory.NamedPointer(Pawn + Layout.AimPunchServices,"Servizi del recoil") != Services))
     throw new InvalidOperationException("Pawn o mappa cambiati. Ripeti la prova.");
    if (Memory.Byte(Rules + Layout.IsValveServer) != 0)
     throw new InvalidOperationException("Server Valve rilevato. Usa una mappa di pratica locale.");
    int health = Memory.Int(Pawn + Layout.Health);
    if (health <= 0 || health > 1000 || Memory.Byte(Pawn + Layout.LifeState) != 0)
     throw new InvalidOperationException("Giocatore locale non vivo o dati non validi.");
-   long network = Memory.Pointer(Engine + Layout.NetworkClient);
+   long network = Memory.NamedPointer(Engine + Layout.NetworkClient,"Client della sessione");
    int signon = Memory.Int(network + Layout.SignOnState);
    if (signon != 6) throw new InvalidOperationException("La mappa non e' ancora pronta (sign-on " + signon + ").");
   }
   internal Sample Read() {
+   if(Services==0)throw new InvalidOperationException("I servizi del recoil non sono stati inizializzati per la registrazione.");
    for (int attempt = 0; attempt < 3; attempt++) {
     long begin = Stopwatch.GetTimestamp();
     int shotsBefore = Memory.Int(Pawn + Layout.ShotsFired);
@@ -191,7 +211,7 @@ namespace RecoilProbe {
     s.view_angle = Vector.From(Memory.Bytes(Client + Layout.ViewAngles, 12), 0);
     s.eye_angle = Vector.From(Memory.Bytes(Pawn + Layout.EyeAngles, 12), 0);
     s.controller_tick = Memory.Int(Controller + Layout.TickBase);
-    s.client_tick = Memory.Int(Memory.Pointer(Engine + Layout.NetworkClient) + Layout.ClientTick);
+    s.client_tick = Memory.Int(Memory.NamedPointer(Engine + Layout.NetworkClient,"Client della sessione") + Layout.ClientTick);
     int shotsAfter = Memory.Int(Pawn + Layout.ShotsFired);
     long end = Stopwatch.GetTimestamp();
     if (shotsBefore != shotsAfter) continue;
@@ -210,6 +230,11 @@ namespace RecoilProbe {
     return s;
    }
    throw new InvalidOperationException("Campione incoerente durante il cambio di colpo.");
+  }
+  private string StartupContext() {
+   return "PID: "+Pid+"\r\nBuild letta: "+Build+"\r\nBuild supportata: "+Layout.TargetBuild+
+    "\r\nclient.dll: "+ClientVersion+" @0x"+Client.ToString("X",CultureInfo.InvariantCulture)+
+    "\r\nengine2.dll: "+EngineVersion+" @0x"+Engine.ToString("X",CultureInfo.InvariantCulture);
   }
   private static bool Finite(float v) { return !float.IsNaN(v) && !float.IsInfinity(v); }
   public void Dispose() {
