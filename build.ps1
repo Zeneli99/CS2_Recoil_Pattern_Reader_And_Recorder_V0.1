@@ -8,7 +8,7 @@ $buildOutput = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 } else { [System.IO.Path]::GetFullPath((Join-Path $buildRoot $OutputDirectory)) }
 [void][System.IO.Directory]::CreateDirectory($buildOutput)
-$buildExeName = 'CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.exe'
+$buildExeName = 'CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.1.exe'
 $buildExe = Join-Path $buildOutput $buildExeName
 $buildReferences = @('/r:System.dll','/r:System.Core.dll','/r:System.Drawing.dll',
     '/r:System.Windows.Forms.dll','/r:System.Management.dll','/r:System.Web.Extensions.dll',
@@ -51,7 +51,7 @@ Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_CONVERTER.png') -Destinat
 Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_CONVERTER_AMC.png') -Destination $buildOutput -Force
 Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_CONVERTER_NO_FIRE.png') -Destination $buildOutput -Force
 
-$buildPackage = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3_FULL'
+$buildPackage = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.1_FULL'
 [void][System.IO.Directory]::CreateDirectory($buildPackage)
 Copy-Item -LiteralPath $buildExe -Destination $buildPackage -Force
 foreach ($buildItem in @('Avvia.cmd','LEGGIMI.txt','a2x-LICENSE.txt','README.md','ANALISI_AK47.md')) {
@@ -104,7 +104,7 @@ $buildHash = (Get-FileHash -LiteralPath $buildExe -Algorithm SHA256).Hash
 ($buildHash + '  ' + $buildExeName) | Set-Content -LiteralPath (Join-Path $buildPackage 'SHA256.txt') -Encoding ASCII
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$buildZip = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3_FULL.zip'
+$buildZip = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.1_FULL.zip'
 if (Test-Path -LiteralPath $buildZip) { throw 'ZIP already exists; choose a fresh output directory.' }
 Add-Type -AssemblyName System.IO.Compression
 $buildStream = [System.IO.File]::Open($buildZip, [System.IO.FileMode]::CreateNew)

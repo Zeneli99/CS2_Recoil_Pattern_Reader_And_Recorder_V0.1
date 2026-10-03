@@ -12,7 +12,7 @@ La schermata principale non avvia piu' una registrazione: **ESTRAI + AMC / F8** 
 
 ## Prova rapida V0.3.1
 
-1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.exe`.
+1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3.1_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.1.exe`.
 2. Avvia CS2 con `-insecure`, in una mappa offline ospitata nello stesso processo. Per la prima prova usa AK47.
 3. Ricarica completamente, togli zoom/burst, lascia il sinistro rilasciato e aspetta il reset del recoil.
 4. Premi **F8 senza sparare**. In `Estrazioni` trovi `.amc`, `.recoil.json` e `.report.json`.

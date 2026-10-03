@@ -29,8 +29,8 @@ jobs:
         with:
           name: CS2-Recoil-Reader-Recorder-V0.3.1-x64
           path: |
-            dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.exe
-            dist/CS2_Recoil_Reader_Recorder_V0.3_FULL.zip
+            dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.1.exe
+            dist/CS2_Recoil_Reader_Recorder_V0.3.1_FULL.zip
             dist/VERIFY.txt
             dist/UI_PREVIEW.png
             dist/UI_CONVERTER.png
@@ -58,8 +58,8 @@ jobs:
           }
           $parent = Invoke-RestMethod -Uri "$apiBase/git/commits/$env:GITHUB_SHA" -Headers $headers
           $assets = @(
-            @{ local='dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.exe'; name='CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.exe' },
-            @{ local='dist/CS2_Recoil_Reader_Recorder_V0.3_FULL.zip'; name='CS2_Recoil_Reader_Recorder_V0.3_FULL.zip' },
+            @{ local='dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.1.exe'; name='CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.1.exe' },
+            @{ local='dist/CS2_Recoil_Reader_Recorder_V0.3.1_FULL.zip'; name='CS2_Recoil_Reader_Recorder_V0.3.1_FULL.zip' },
             @{ local='dist/VERIFY.txt'; name='VERIFY.txt' },
             @{ local='dist/UI_PREVIEW.png'; name='UI_PREVIEW.png' },
             @{ local='dist/UI_CONVERTER.png'; name='UI_CONVERTER.png' },
