@@ -1,8 +1,16 @@
-# CS2 Recoil Reader & Recorder V0.3 — senza sparare, sperimentale
+# CS2 Recoil Reader & Recorder V0.3.1 — correzione dei tempi AMC
+
+Questa versione corregge l'esportazione dei delay secondo la convenzione dichiarata dalla registrazione AMC Fusion usata come riferimento: **1 ms di costo per comando MoveR**. Un movimento pianificato ogni 10 ms viene quindi scritto normalmente con Delay 9 ms e un MoveR. Se un movimento viene saltato perché X/Y arrotondati non cambiano, il delay successivo conta soltanto i comandi realmente emessi. I delta divisi in più MoveR contano ciascun comando.
+
+La traiettoria, i punti dei colpi, la sensibilità, lo smoothing moderato e il rilascio pianificato restano invariati. L'importazione legge la convenzione dal Comment dell'AMC, così una successiva conversione non applica due volte la correzione. Gli AMC precedenti privi del nuovo campo conservano la convenzione delay-only.
+
+**Limite:** il millisecondo per comando è una convenzione del recorder, non una misura del dispositivo. I report indicano `CommandTimingMeasured=false`. Il modello senza sparare rimane sperimentale: legge VData reali ma ricostruisce impulsi e angoli. Questa correzione non è una dimostrazione della traiettoria balistica nativa né della concentrazione dei colpi in gioco. La registrazione privata di riferimento non è incorporata nell'EXE o nel repository.
+
+I controlli includono uno stream AMC golden indipendente, 300 comandi senza deriva del clock, delta divisi, conversione sensibilità, reimportazione e preservazione dei punti simulati/registrati. EXE e sorgenti completi sono pubblicati in `Downloads/V0.3.1` dopo la compilazione e i controlli Windows.
 
 La schermata principale non avvia piu' una registrazione: **ESTRAI + AMC / F8** legge i parametri VData dell'arma attiva e crea una macro di prova senza sparare. Il recorder precedente rimane separato in **RECORDER / TEST**, solo per confronto e diagnostica.
 
-## Prova rapida V0.3
+## Prova rapida V0.3.1
 
 1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.exe`.
 2. Avvia CS2 con `-insecure`, in una mappa offline ospitata nello stesso processo. Per la prima prova usa AK47.
@@ -23,11 +31,11 @@ L'output conserva i punti **simulati** dei colpi e arrotonda la posizione cumula
 
 La modalita' senza sparare supporta solo full-auto, modalita' primaria senza zoom/burst, caricatore pieno e recoil azzerato. Per altri casi si ferma. Restano i controlli build 14188, `-insecure`, IsValveDS e presenza del modulo server locale; quest'ultimo non dimostra da solo che nessun client remoto sia connesso: usa una mappa offline. Il processo e' esterno e in sola lettura; nessuna DLL, hook, scrittura nella memoria del gioco o simulazione di input. Bloody esegue l'AMC, non questo programma.
 
-## Verifiche e distribuzione V0.3
+## Verifiche e distribuzione V0.3.1
 
 `build.ps1` compila l'EXE x64 con .NET Framework su Windows. GitHub Actions esegue i controlli esistenti e quelli nuovi su lettura VData nel solo processo di test, errori di puntatore/nome/flag, RNG, primo impulso confrontato con la fixture AK, ripetibilita', JSON, tempi, sensibilita', punti simulati e anteprime. **CS2 e Bloody non vengono avviati in CI.** Il primo impulso coincidente non dimostra che l'intero algoritmo corrente sia corretto.
 
-Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. `Esempio_NoFire_SINTETICO` contiene un esempio con parametri AK costruiti dal test, NON estratti da una sessione live. Gli esempi precedenti restano separati; non sono i risultati della nuova estrazione. I download della V0.3 vengono pubblicati in `Downloads/V0.3` solo dopo i controlli.
+Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. `Esempio_NoFire_SINTETICO` contiene un esempio con parametri AK costruiti dal test, NON estratti da una sessione live. Gli esempi precedenti restano separati; non sono i risultati della nuova estrazione. I download della V0.3.1 vengono pubblicati in `Downloads/V0.3.1` solo dopo i controlli.
 
 Fonti tecniche: [schema della build fissata](https://github.com/a2x/cs2-dumper/tree/2d204b1400eb08accfb4098ad954602448dacb07/output), [implementazione legacy della tabella](https://github.com/SwagSoftware/Kisak-Strike/blob/master/game/shared/cstrike15/cs_weapon_parse.cpp) e [stream legacy](https://github.com/SwagSoftware/Kisak-Strike/blob/master/vstdlib/random.cpp). Le fonti legacy non sono una prova dell'implementazione attuale di CS2.
 

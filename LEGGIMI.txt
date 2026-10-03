@@ -1,4 +1,16 @@
-CS2 SENZA SPARARE — V0.3 SPERIMENTALE
+CS2 RECOIL — V0.3.1 — CORREZIONE TEMPI AMC
+
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.1.exe.
+ESTRAI + AMC continua a leggere i parametri VData senza sparare.
+Il nuovo exporter usa la convenzione 1 ms per MoveR indicata dal recorder Fusion:
+per una cadenza prevista di 10 ms scrive di solito Delay 9 ms + MoveR.
+La traiettoria e la sensibilita' restano invariate.
+Il campo MoveRCommandCostMs nel Comment evita una seconda correzione al reimport.
+Questo costo e' un'ipotesi di esecuzione, NON una misura dell'hardware.
+Il modello recoil resta sperimentale; questa build non e' verificata in gioco.
+La macro privata fornita come riferimento non e' inclusa o copiata nell'EXE.
+
+CS2 SENZA SPARARE — V0.3.1 SPERIMENTALE
 
 Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.exe.
 CS2 con -insecure, mappa OFFLINE ospitata sul PC; prima prova con AK47.
@@ -35,7 +47,7 @@ La precisione dei proiettili non e' ancora verificata. Leggi ANALISI_AK47.md.
 
 CS2 RECOIL INTERNO V0.2.5
 
-Apri RECORDER / TEST dall'EXE V0.3.
+Apri RECORDER / TEST dall'EXE V0.3.1.
 Arma equipaggiata e sensibilita' vengono lette automaticamente dal gioco.
 
 LETTURA DIRETTA DEL RECOIL

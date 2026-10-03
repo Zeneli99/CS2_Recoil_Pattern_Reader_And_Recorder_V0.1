@@ -34,6 +34,9 @@ internal static class CoreChecks {
   Check(xml.SelectSingleNode("//GUIOption/RepeatType").InnerText=="1","Hold repeat type retained");
   Check(xml.SelectSingleNode("//KeyUp/Syntax").InnerText.Trim()=="LeftUp 1","Release handler lifts left button");
   Timeline t=new Timeline();
+  XmlNode comment=xml.SelectSingleNode("//Comment");
+  // Independent evaluator: a timing tag is an explicit assumption, not measured elapsed time.
+  int moveCost=comment!=null&&comment.InnerText.Contains("MoveRCommandCostMs=1;")?1:0;
   string syntax=xml.SelectSingleNode("//KeyDown/Syntax").InnerText;
   foreach(string line in syntax.Split(new string[] {"\r\n","\n"},StringSplitOptions.RemoveEmptyEntries)) {
    string[] parts=line.Split(' ');
@@ -47,7 +50,7 @@ internal static class CoreChecks {
     if(!t.Left)throw new Exception("Movement after left-up");
     int x=Int32.Parse(parts[1],CultureInfo.InvariantCulture),y=Int32.Parse(parts[2],CultureInfo.InvariantCulture);
     if(Math.Abs(x)>127||Math.Abs(y)>127||(x==0&&y==0))throw new Exception("Invalid MoveR");
-    t.X+=x;t.Y+=y;t.Commands++;t.Moves.Add(new int[] {t.Time,t.X,t.Y});
+    t.Time+=moveCost;t.X+=x;t.Y+=y;t.Commands++;t.Moves.Add(new int[] {t.Time,t.X,t.Y});
    } else throw new Exception("Unknown AMC command");
   }
   Check(!t.Left&&t.Tail==30000,"Fixed anti-repeat tail is 30000ms after left-up");return t;
@@ -450,6 +453,7 @@ internal static class CoreChecks {
    string csv=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.csv"));
    string json=File.ReadAllText(Path.Combine(fixtures,"AK47_30_SHOTS_V01.json"));
    RecordingData legacy=RecordingIO.Parse(csv,json);
+   AmcTimingChecks.Run(output,Check,Reject);
    NoFireChecks.Run(output,legacy,Check,Reject);
    Check(legacy.Sensitivity==1.25&&legacy.WeaponName=="AK47"&&!legacy.AutomaticIdentity,
     "V0.1 imports manual labels without claiming automatic verification");

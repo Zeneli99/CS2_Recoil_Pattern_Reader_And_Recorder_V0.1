@@ -13,7 +13,9 @@ namespace RecoilProbe {
  internal sealed class AmcResult {
   public string AmcPath, ReportPath, Weapon, SourcePath;
   public int Shots, MoveCommands, OriginalMoveCommands, AntiRepeatMs = 30000, TotalX, TotalY;
-  public int SmoothingStepMs = 10;
+  public int SmoothingStepMs = 10, MoveRCommandCostMs;
+  public bool CommandTimingMeasured = false;
+  public string CommandTimingConvention = "Delay-only legacy timeline; command runtime is not measured.";
   public string SourceKind = "CSV/JSON", ReleaseTimingSource = "Native last-shot time plus median shot cycle";
   public double SourceSensitivity, TargetSensitivity, ActiveDurationMs, MaximumTimingResidualMs;
   public bool WeaponAndSensitivityAutomaticallyRead, InstantaneousRecoilVerified = false;
@@ -124,7 +126,7 @@ namespace RecoilProbe {
    while(ms>0){int step=Math.Min(999,ms);commands.Add("Delay "+step+" ms");ms-=step;}
   }
   internal static void Move(List<string> commands,int dx,int dy,AmcResult result) {
-   // Larger deltas are split at the same scheduled time, not spread into micro delays.
+   // Large deltas use consecutive AMC-range chunks; ScheduledMove budgets each command cost.
    while(dx!=0 || dy!=0) {
     int x=Math.Max(-127,Math.Min(127,dx)),y=Math.Max(-127,Math.Min(127,dy));
     commands.Add("MoveR "+x+" "+y);result.MoveCommands++;dx-=x;dy-=y;
@@ -132,6 +134,24 @@ namespace RecoilProbe {
    }
   }
   internal const int SmoothStepMs = 10;
+  internal const string CompensatedTimingConvention =
+   "1 ms per MoveR convention from the user's working AMC Fusion Recorder capture; a playback assumption, not a hardware timing measurement.";
+  internal static void ScheduledMove(List<string> commands,int time,int dx,int dy,
+   ref int lastTime,AmcResult result) {
+   if(dx==0&&dy==0)return;
+   if(result.MoveRCommandCostMs<0||result.MoveRCommandCostMs>1)
+    throw new InvalidOperationException("Costo MoveR non supportato: usa 0 o 1 ms.");
+   long magnitude=Math.Max(Math.Abs((long)dx),Math.Abs((long)dy));
+   long chunks=(magnitude+126)/127;
+   if(chunks>10000-result.MoveCommands)
+    throw new InvalidOperationException("Troppi comandi AMC.");
+   long wait=(long)time-lastTime-chunks*result.MoveRCommandCostMs;
+   if(wait<0||wait>Int32.MaxValue)
+    throw new InvalidOperationException("I comandi MoveR non entrano nel tempo previsto. Nessun ritardo nascosto aggiunto.");
+   Delay(commands,(int)wait);
+   Move(commands,dx,dy,result);
+   lastTime=time;
+  }
   private static void Segment(List<string> commands,int fromTime,int toTime,
    double fromX,double fromY,double toX,double toY,
    ref int lastTime,ref int lastX,ref int lastY,AmcResult result) {
@@ -145,8 +165,8 @@ namespace RecoilProbe {
     int y=Round(part==parts?toY:fromY+(toY-fromY)*f);
     int dx=x-lastX,dy=y-lastY;
     if(dx==0&&dy==0)continue;
-    Delay(commands,time-lastTime);Move(commands,dx,dy,result);
-    lastTime=time;lastX=x;lastY=y;
+    ScheduledMove(commands,time,dx,dy,ref lastTime,result);
+    lastX=x;lastY=y;
    }
   }
   private static void DynamicsSegment(List<string> commands,int fromTime,int toTime,
@@ -170,8 +190,8 @@ namespace RecoilProbe {
     int time=fromTime+Round(span*fraction),x=Round(yaw*scale),y=Round(-pitch*scale);
     int dx=x-lastX,dy=y-lastY;
     if(dx==0&&dy==0)continue;
-    Delay(commands,time-lastTime);Move(commands,dx,dy,result);
-    lastTime=time;lastX=x;lastY=y;
+    ScheduledMove(commands,time,dx,dy,ref lastTime,result);
+    lastX=x;lastY=y;
    }
   }
   private static double BoundProgress(double value,double from,double to,double fraction) {
@@ -187,7 +207,8 @@ namespace RecoilProbe {
    AmcResult result=new AmcResult {Weapon=data.WeaponName,Shots=points.Count,
     SourcePath=data.SourcePath,SourceSensitivity=data.Sensitivity,TargetSensitivity=targetSensitivity,
     WeaponAndSensitivityAutomaticallyRead=data.AutomaticIdentity,SourceKind="CS2_INTERNAL_RECOIL_STATE",
-    DeterministicRecoilStateDirectlyRead=true,BallisticTrajectoryDirectlyRead=false,ServerSpreadIncluded=false};
+    DeterministicRecoilStateDirectlyRead=true,BallisticTrajectoryDirectlyRead=false,ServerSpreadIncluded=false,
+    MoveRCommandCostMs=1,CommandTimingConvention=CompensatedTimingConvention};
    result.Dynamics=RecoilDynamics.Fit(points);
    List<string> commands=new List<string>();commands.Add("LeftDown 1");
    double firstTime=points[0].ObservedMs,firstTick=points[0].Tick;
@@ -228,6 +249,7 @@ namespace RecoilProbe {
    AmcResult result=new AmcResult {Weapon=data.WeaponName,SourceKind="AMC",
     SourcePath=data.SourcePath,SourceSensitivity=data.Sensitivity,TargetSensitivity=targetSensitivity,
     OriginalMoveCommands=data.MoveCommands,ReleaseTimingSource="Original AMC LeftUp time",
+    MoveRCommandCostMs=data.MoveRCommandCostMs,CommandTimingConvention=data.CommandTimingConvention,
     Method="Existing AMC cumulative positions resampled around 10ms; every original timed anchor retained. First movement kept at its original time.",
     Assumptions="Existing AMC raw mouse counts; sensitivity from its header; no new game-memory verification. Cumulative rounding avoids drift."};
    List<string> commands=new List<string>();commands.Add("LeftDown 1");
@@ -247,6 +269,8 @@ namespace RecoilProbe {
    return Save(result,commands,output);
   }
   internal static AmcResult Save(AmcResult result,List<string> commands,string output) {
+   if(result.MoveRCommandCostMs<0||result.MoveRCommandCostMs>1)
+    throw new InvalidOperationException("Costo MoveR non supportato: usa 0 o 1 ms.");
    string path=Path.GetFullPath(output);
    if(!String.Equals(Path.GetExtension(path),".amc",StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException("L'output deve avere estensione .amc.");
@@ -264,7 +288,8 @@ namespace RecoilProbe {
      writer.WriteElementString("Major","");
      writer.WriteElementString("Description",result.Weapon+" · SENS "+
       result.TargetSensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+" · SMOOTH 10 ms · PROVA NON VALIDATA IN GIOCO");
-     writer.WriteElementString("Comment",result.Method+" "+result.Assumptions+
+     writer.WriteElementString("Comment","MoveRCommandCostMs="+result.MoveRCommandCostMs.ToString(CultureInfo.InvariantCulture)+
+      "; "+result.CommandTimingConvention+" "+result.Method+" "+result.Assumptions+
       " Source: "+(result.SourcePath==null?"recording":Path.GetFileName(result.SourcePath))+
       ". Source kind: "+result.SourceKind+". Weapon/sensitivity automatically read: "+result.WeaponAndSensitivityAutomaticallyRead+
       ". 30000ms tail delays repetition of the active invocation; a new press can start a new run.");

@@ -39,6 +39,8 @@ internal static class NoFireChecks {
    "Synthetic inputs do not claim live extraction or current engine verification");
   AmcResult result=NoFireGenerator.Convert(loaded,amcPath,1.25);
   AmcInput amc=AmcInput.Load(result.AmcPath);
+  check(result.MoveRCommandCostMs==1&&amc.MoveRCommandCostMs==1&&!result.CommandTimingMeasured,
+   "No-fire output declares the Fusion 1ms command convention without claiming a hardware measurement");
   check(result.SourceKind=="CS2_VDATA_NO_FIRE_EXPERIMENTAL"&&result.RecoilSequenceReconstructed&&
    !result.DeterministicRecoilStateDirectlyRead&&!result.BallisticTrajectoryDirectlyRead&&
    !result.CurrentEngineAlgorithmVerified&&!result.InstantaneousRecoilVerified,

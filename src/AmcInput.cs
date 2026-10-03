@@ -12,7 +12,8 @@ namespace RecoilProbe {
  internal sealed class AmcInput {
   internal string SourcePath,WeaponName;
   internal double Sensitivity;
-  internal int ReleaseTime,TailMs,MoveCommands;
+  internal int ReleaseTime,TailMs,MoveCommands,MoveRCommandCostMs;
+  internal string CommandTimingConvention = "Delay-only legacy timeline; command runtime is not measured.";
   internal readonly List<MouseAnchor> Anchors=new List<MouseAnchor>();
   private static string One(XmlNode node,string path) {
    XmlNodeList found=node.SelectNodes(path);
@@ -57,6 +58,17 @@ namespace RecoilProbe {
     CultureInfo.InvariantCulture,out sensitivity)||!IdentityReader.ValidSensitivity(sensitivity))
     throw new InvalidOperationException("Sensibilita' AMC assente: serve l'intestazione ARMA · SENS 1.250.");
    AmcInput data=new AmcInput {SourcePath=path,WeaponName=header.Groups[1].Value,Sensitivity=sensitivity};
+   XmlNodeList comments=macro.SelectNodes("Comment");
+   if(comments.Count>1)throw new InvalidOperationException("Comment AMC duplicato.");
+   MatchCollection timing=Regex.Matches(comments.Count==0?"":comments[0].InnerText,
+    @"\bMoveRCommandCostMs\s*=\s*([^;\s]+)");
+   if(timing.Count>1)throw new InvalidOperationException("Convenzione tempi AMC duplicata.");
+   if(timing.Count==1) {
+    data.MoveRCommandCostMs=Number(timing[0].Groups[1].Value);
+    if(data.MoveRCommandCostMs<0||data.MoveRCommandCostMs>1)
+     throw new InvalidOperationException("Costo MoveR AMC non supportato: usa 0 o 1 ms.");
+    if(data.MoveRCommandCostMs==1)data.CommandTimingConvention=AmcConverter.CompensatedTimingConvention;
+   }
    int time=0,x=0,y=0,lines=0;bool down=false,released=false;
    foreach(string raw in One(macro,"KeyDown/Syntax").Split(new string[] {"\r\n","\n"},StringSplitOptions.RemoveEmptyEntries)) {
     string line=raw.Trim();if(line.Length==0)continue;
@@ -79,6 +91,8 @@ namespace RecoilProbe {
      int dx=Number(p[1]),dy=Number(p[2]);
      if(dx< -127||dx>127||dy< -127||dy>127||(dx==0&&dy==0))
       throw new InvalidOperationException("MoveR AMC non valido.");
+     time+=data.MoveRCommandCostMs;
+     if(time>20000)throw new InvalidOperationException("Durata AMC oltre i limiti.");
      x+=dx;y+=dy;data.MoveCommands++;
      if(Math.Abs(x)>10000000||Math.Abs(y)>10000000)
       throw new InvalidOperationException("Movimento AMC fuori scala.");

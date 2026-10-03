@@ -37,7 +37,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows checks failed.' }
 $buildCore = Join-Path $buildOutput 'CoreChecks.exe'
 $buildCoreArguments = @('/nologo','/codepage:65001','/target:exe','/platform:x64',
     ('/out:' + $buildCore), ('/r:' + $buildExe)) + $buildReferences +
-    @((Join-Path $buildRoot 'tests/CoreChecks.cs'), (Join-Path $buildRoot 'tests/NoFireChecks.cs'))
+    @((Join-Path $buildRoot 'tests/CoreChecks.cs'), (Join-Path $buildRoot 'tests/NoFireChecks.cs'),
+      (Join-Path $buildRoot 'tests/AmcTimingChecks.cs'))
 & $buildCompiler @buildCoreArguments
 if ($LASTEXITCODE -ne 0) { throw 'Conversion check compilation failed.' }
 $buildCoreOutput = Join-Path $buildOutput 'ConversionChecks'
@@ -85,13 +86,15 @@ foreach ($buildItem in @('build.ps1','Avvia.cmd','LEGGIMI.txt','a2x-LICENSE.txt'
 }
 $buildCommit = if ([string]::IsNullOrWhiteSpace($env:GITHUB_SHA)) { 'local build' } else { $env:GITHUB_SHA }
 $buildInfo = @(
-    'CS2 Recoil Pattern Reader And Recorder V0.3 EXPERIMENTAL',
+    'CS2 Recoil Pattern Reader And Recorder V0.3.1 EXPERIMENTAL',
     ('Commit: ' + $buildCommit),
     ('UTC: ' + [DateTime]::UtcNow.ToString('o')),
     'Platform: Windows x64, .NET Framework',
     'Target engine build: 14188',
     'No-fire VData extraction tested only against allocated test-process memory; live CS2 VData: NOT TESTED',
     'No-fire legacy reconstruction and AMC export tested for simulated shot anchors, moderate 10ms output and JSON reimport',
+    'AMC exporter uses a declared 1ms/MoveR convention matching the working Fusion capture; physical command timing: NOT MEASURED',
+    'Timing-only correction preserves X/Y and native/model anchors; live CS2 accuracy: NOT TESTED',
     'Current-engine RNG, decay, scale, first-shot latency and resulting trajectory: NOT VERIFIED',
     'AMC execution fitting tested on synthetic quantized traces; real Bloody execution: NOT TESTED',
     'Live weapon/sensitivity detection and recoil compensation: NOT TESTED'

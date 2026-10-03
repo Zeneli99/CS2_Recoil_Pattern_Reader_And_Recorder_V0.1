@@ -23,7 +23,7 @@ namespace RecoilProbe {
   public string Provenance = "Assumed legacy constants, NOT read from this CS2 session. Current engine dynamics and first-shot latency are not verified.";
  }
  internal sealed class WeaponSnapshot {
-  public string Format = "CS2_NO_FIRE_V1", Version = "0.3.0", CreatedUtc, Weapon, SourcePath;
+  public string Format = "CS2_NO_FIRE_V1", Version = "0.3.1", CreatedUtc, Weapon, SourcePath;
   public int Build;
   public string SchemaCommit, VDataAddress, VDataPointerLocator = "weapon+0x388 candidate; validated against active entity name and stable values";
   public float Sensitivity;
@@ -188,6 +188,7 @@ namespace RecoilProbe {
     WeaponAndSensitivityAutomaticallyRead=data.NativeParametersRead,NoFireInput=data,
     RecoilSequenceReconstructed=true,CurrentEngineAlgorithmVerified=false,
     DeterministicRecoilStateDirectlyRead=false,BallisticTrajectoryDirectlyRead=false,
+    MoveRCommandCostMs=1,CommandTimingConvention=AmcConverter.CompensatedTimingConvention,
     Method="Read-only VData parameters plus an unverified legacy seed/impulse/damping model. Simulated shot anchors interpolated around 10ms; cumulative raw mouse rounding, no 1ms motion. No shot was recorded to create this file.",
     Assumptions=data.Model.Provenance+" "+data.Warning,
     ReleaseTimingSource="Assumed immediate first shot, VData cycle; left-up 1ms before the next scheduled shot after a full magazine"};
@@ -203,8 +204,8 @@ namespace RecoilProbe {
      int x=AmcConverter.Round((from.Yaw+(to.Yaw-from.Yaw)*f)*scaleX);
      int y=AmcConverter.Round(-(from.Pitch+(to.Pitch-from.Pitch)*f)*scaleY);
      if(x==lastX&&y==lastY)continue;
-     AmcConverter.Delay(commands,time-lastTime);AmcConverter.Move(commands,x-lastX,y-lastY,result);
-     lastTime=time;lastX=x;lastY=y;
+     AmcConverter.ScheduledMove(commands,time,x-lastX,y-lastY,ref lastTime,result);
+     lastX=x;lastY=y;
     }
    }
    int release=AmcConverter.Round(shots.Count*(double)data.Native.CycleSeconds*1000)-1;
