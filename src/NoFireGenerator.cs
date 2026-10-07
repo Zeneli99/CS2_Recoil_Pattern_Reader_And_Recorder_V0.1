@@ -68,7 +68,8 @@ namespace RecoilProbe {
    long vdata=memory.NamedPointer(weapon+Layout.WeaponVData,"VData arma (candidato +0x388)");
    long name=memory.NamedPointer(vdata+Layout.VDataName,"Nome VData arma");
    string actual=IdentityReader.ReadName(memory,name);
-   if(actual!=expectedName)throw new InvalidOperationException("VData non validata: nome '"+actual+"' diverso da '"+expectedName+"'.");
+   if(!WeaponVDataIdentity.Matches(definition,expectedName,actual))
+    throw new InvalidOperationException("VData non validata: nome '"+actual+"' incompatibile con entita' '"+expectedName+"' e ID arma "+definition+".");
    byte full=memory.Byte(vdata+Layout.VDataFullAuto);
    if(full>1)throw new InvalidOperationException("Flag full-auto VData non valido.");
    return new WeaponParameters {DesignerName=actual,ItemDefinitionIndex=definition,

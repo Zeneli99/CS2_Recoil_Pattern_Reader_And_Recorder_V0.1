@@ -15,8 +15,8 @@ namespace RecoilProbe {
   private System.Windows.Forms.Timer monitor;
   private const int HotkeyId=8119;
   internal MainForm() {
-   Ui.Style(this,"CS2 SENZA SPARARE · V0.3.4 SPERIMENTALE");Ui.Title(this,"CS2 SENZA SPARARE");
-   Ui.Label(this,"V0.3.4",470,25,60,24);
+   Ui.Style(this,"CS2 SENZA SPARARE · V0.3.5 SPERIMENTALE");Ui.Title(this,"CS2 SENZA SPARARE");
+   Ui.Label(this,"V0.3.5",470,25,60,24);
    converter=Ui.Button(this,"CONVERTER",20,54,145,29);
    converter.Click+=delegate {using(ConverterForm form=new ConverterForm())form.ShowDialog(this);};
    recorder=Ui.Button(this,"RECORDER / TEST",180,54,165,29);

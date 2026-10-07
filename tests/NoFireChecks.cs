@@ -87,13 +87,14 @@ internal static class NoFireChecks {
   reject(delegate{NoFireGenerator.Reconstruct(bad);},"Infinite model parameters are rejected");
   bad=Example();bad.Model.IntegrationStepSeconds=1.0/1000;
   reject(delegate{NoFireGenerator.Reconstruct(bad);},"Unexpected model timestep is rejected");
-  NativeReadChecks(check,reject);
+  NativeReadChecks(output,check,reject);
  }
  private static void WriteFloat(IntPtr address,int offset,float value) {
   Marshal.Copy(BitConverter.GetBytes(value),0,IntPtr.Add(address,offset),4);
  }
- private static void NativeReadChecks(Action<bool,string> check,Action<Action,string> reject) {
-  IntPtr weapon=Marshal.AllocHGlobal(0x2000),vdata=Marshal.AllocHGlobal(0x900),name=Marshal.StringToHGlobalAnsi("weapon_ak47");
+ private static void NativeReadChecks(string output,Action<bool,string> check,Action<Action,string> reject) {
+  IntPtr weapon=Marshal.AllocHGlobal(0x2000),vdata=Marshal.AllocHGlobal(0x900),name=Marshal.StringToHGlobalAnsi("weapon_ak47"),
+   silenced=Marshal.StringToHGlobalAnsi("weapon_m4a1_silencer");
   try {
    Marshal.Copy(new byte[0x2000],0,weapon,0x2000);Marshal.Copy(new byte[0x900],0,vdata,0x900);
    Marshal.WriteIntPtr(weapon,Layout.WeaponVData,vdata);Marshal.WriteIntPtr(vdata,Layout.VDataName,name);
@@ -108,6 +109,33 @@ internal static class NoFireChecks {
      "Read-only native interop extracts VData from allocated test-process memory without firing");
     reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",7);},
      "VData with a name different from the active weapon is rejected");
+    Marshal.WriteIntPtr(vdata,Layout.VDataName,silenced);Marshal.WriteInt32(vdata,Layout.VDataMaxClip,20);
+    Marshal.WriteInt32(vdata,Layout.VDataRecoilSeed,555);
+    WeaponParameters m4s=WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);
+    check(m4s.ItemDefinitionIndex==60&&m4s.DesignerName=="weapon_m4a1_silencer"&&m4s.MaxClip==20&&m4s.RecoilSeed==555,
+     "Reported M4A1-S mismatch is accepted only for item ID 60 and reads silenced VData parameters");
+    check(WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1_silencer",60).DesignerName=="weapon_m4a1_silencer",
+     "M4A1-S canonical entity and VData names also remain valid");
+    WeaponSnapshot m4Snapshot=new WeaponSnapshot {Weapon=WeaponCatalog.Name(m4s.ItemDefinitionIndex),Sensitivity=1.25F,
+     Build=Layout.TargetBuild,SchemaCommit=Layout.SourceCommit,NativeParametersRead=false,Native=m4s};
+    string savedParameters;
+    MacroExportResult m4Xml=MainForm.ExportSnapshot(m4Snapshot,Path.Combine(output,"M4A1_S_NATIVE_TEST.amc"),MacroFormat.XmlRazer,out savedParameters);
+    WeaponSnapshot m4Roundtrip;
+    check(File.Exists(m4Xml.OutputPath)&&m4Xml.Xml.MoveCommands>0&&WeaponSnapshotIO.TryLoad(savedParameters,out m4Roundtrip)&&
+     m4Roundtrip.Weapon=="M4A1_S"&&m4Roundtrip.Native.ItemDefinitionIndex==60&&m4Roundtrip.Native.DesignerName=="weapon_m4a1_silencer",
+     "M4A1-S parameters read through the reported alias proceed through selected XML extraction and JSON reimport");
+    reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",16);},
+     "M4A4 ID 16 cannot accept M4A1-S VData through the entity-name alias");
+    reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1_silencer",16);},
+     "Matching silenced names with the wrong item ID are rejected");
+    reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_ak47",60);},
+     "M4A1-S ID alone cannot authorize an unrelated entity name");
+    Marshal.WriteIntPtr(vdata,Layout.VDataName,name);
+    reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);},
+     "M4A1-S ID and base entity cannot accept unrelated AK VData");
+    check(WeaponVDataIdentity.Matches(16,"weapon_m4a1","weapon_m4a1")&&
+     !WeaponVDataIdentity.Matches(60,"weapon_m4a1","weapon_m4a1"),
+     "M4A4 identity remains exact while M4A1-S requires its own silenced VData");
     Marshal.WriteByte(vdata,Layout.VDataFullAuto,2);
     reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_ak47",7);},
      "Invalid native boolean cannot masquerade as a full-auto VData");
@@ -115,6 +143,6 @@ internal static class NoFireChecks {
     reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_ak47",7);},
      "Invalid VData pointer is rejected with the field-specific diagnostic");
    }
-  } finally{Marshal.FreeHGlobal(name);Marshal.FreeHGlobal(vdata);Marshal.FreeHGlobal(weapon);}
+  } finally{Marshal.FreeHGlobal(silenced);Marshal.FreeHGlobal(name);Marshal.FreeHGlobal(vdata);Marshal.FreeHGlobal(weapon);}
  }
 }

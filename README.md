@@ -1,6 +1,8 @@
-# RecoilLabs / CS2 Recoil Reader & Recorder V0.3.4 — scelta AMC / XML Razer
+# RecoilLabs / CS2 Recoil Reader & Recorder V0.3.5 — riconoscimento M4A1-S
 
-La V0.3.4 sostituisce la spunta aggiuntiva della V0.3.3 con una scelta esplicita **Formato: AMC / XML Razer**, nella schermata principale, nel converter e nel recorder. Mantiene la compatibilita' CS2 14189 e i motori AMC identici alla V0.3.1. La calibrazione XML rimane quella M249 verificata in gioco dall'utente sul Naga V3 Pro: stessi X/Y e tempi Delay +1 ms per ciascun MoveR.
+La V0.3.5 corregge il blocco del report utente: entita' `weapon_m4a1`, VData `weapon_m4a1_silencer`. La coppia viene accettata esclusivamente con **item definition 60 (M4A1-S)**; per questa variante i VData devono essere quelli silenziati. ID M4A4 o nomi di altre armi continuano a produrre un errore, che ora include l'ID dell'arma. Si leggono caricatore, ciclo e recoil dalla VData effettiva: nessuna sostituzione con parametri M4A4.
+
+Restano la scelta esplicita **Formato: AMC / XML Razer** della V0.3.4, la compatibilita' CS2 14189, il modello e la generazione AMC invariati. La calibrazione XML rimane quella M249 verificata in gioco dall'utente sul Naga V3 Pro: stessi X/Y e tempi Delay +1 ms per ciascun MoveR. Il fix riguarda il riconoscimento prima dell'esportazione, quindi si applica a entrambi i formati.
 
 Seleziona **XML Razer** per salvare soltanto `.xml` e report nella sottocartella **XML**; seleziona **AMC** per salvare soltanto `.amc` e report nella sottocartella **AMC**. Le due cartelle restano separate. I parametri estratti `.recoil.json` vengono conservati accanto al formato selezionato anche se la successiva conversione fallisce. Il pulsante principale mostra **ESTRAI XML · F8** o **ESTRAI AMC · F8**. La scelta viene ricordata in `%LOCALAPPDATA%/RecoilLabs/ExportFormat.txt` e ripresa quando si apre uno strumento o si riavvia il programma. Un errore XML viene mostrato come errore dell'esportazione selezionata e registrato nella diagnostica; non viene sostituito da un messaggio di successo AMC.
 
@@ -24,13 +26,13 @@ La traiettoria, i punti dei colpi, la sensibilità, lo smoothing moderato e il r
 
 I report AMC esistenti mantengono `CommandTimingMeasured=false`; la calibrazione Razer e la verifica M249 fornite dall'utente vengono documentate nel report XML separato. Il modello senza sparare rimane sperimentale: legge VData reali ma ricostruisce impulsi e angoli. La verifica M249 della conversione tra dispositivi non prova la correttezza di tutte le nuove traiettorie generate. Il codice della generazione e i metadati AMC preesistenti non sono stati modificati.
 
-I controlli includono uno stream AMC golden indipendente, 300 comandi senza deriva del clock, delta divisi, conversione sensibilità, reimportazione e preservazione dei punti simulati/registrati. EXE e sorgenti completi sono pubblicati in `Downloads/V0.3.4` dopo la compilazione e i controlli Windows.
+I controlli includono uno stream AMC golden indipendente, 300 comandi senza deriva del clock, delta divisi, conversione sensibilità, reimportazione e preservazione dei punti simulati/registrati. EXE e sorgenti completi sono pubblicati in `Downloads/V0.3.5` dopo la compilazione e i controlli Windows.
 
 La schermata principale non avvia piu' una registrazione: **ESTRAI / F8** legge i parametri VData dell'arma attiva e crea il formato selezionato senza sparare. Il recorder precedente rimane separato in **RECORDER / TEST**, solo per confronto e diagnostica.
 
-## Prova rapida V0.3.4
+## Prova rapida V0.3.5
 
-1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3.4_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.4.exe`.
+1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3.5_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.5.exe`.
 2. Avvia CS2 con `-insecure`, in una mappa offline ospitata nello stesso processo. Per la prima prova usa AK47.
 3. Ricarica completamente, togli zoom/burst, lascia il sinistro rilasciato e aspetta il reset del recoil.
 4. Scegli **Formato: AMC** oppure **XML Razer**, poi premi **F8 senza sparare**. Il formato selezionato, `.recoil.json` e `.report.json` si trovano in `Estrazioni/AMC` oppure `Estrazioni/XML`.
@@ -41,7 +43,7 @@ CONVERTER legge anche il nuovo `.recoil.json`: funziona senza CS2 aperto, rigene
 
 ## Cosa viene estratto e cosa no
 
-Sono letti arma/ID, sensibilita' base, capacita' caricatore, full-auto, modalita', numero di proiettili, cycle time, recoil seed, angolo/varianza e magnitudine/varianza. Il puntatore VData `weapon+0x388` e' un candidato non nominato nello schema: viene accettato soltanto se il nome coincide con l'entita' attiva, i campi sono plausibili e due letture stabili concordano. Se il layout non corrisponde, il programma si ferma; non sostituisce i parametri dell'arma con una tabella inventata.
+Sono letti arma/ID, sensibilita' base, capacita' caricatore, full-auto, modalita', numero di proiettili, cycle time, recoil seed, angolo/varianza e magnitudine/varianza. Il puntatore VData `weapon+0x388` e' un candidato non nominato nello schema: viene accettato soltanto se il nome coincide con l'entita' attiva oppure corrisponde all'alias M4A1-S con ID 60 descritto sopra, i campi sono plausibili e due letture stabili concordano. Se il layout non corrisponde, il programma si ferma; non sostituisce i parametri dell'arma con una tabella inventata.
 
 **Non viene estratta una traiettoria nativa dei proiettili.** Gli impulsi e il decadimento vengono ricostruiti con un modello legacy non ancora verificato nel motore CS2 corrente. RNG Park-Miller/shuffle, tabella di 64 impulsi, smoothing della varianza e soppressione iniziale sono ipotesi esplicite. I valori del modello si trovano in `Model`; quelli letti in `Native`. Non vengono letti automaticamente m_pitch/m_yaw, recoil scale o costanti di decadimento: i default sperimentali sono 0.022/0.022, 2.0, 8/18/4.5, soppressione 4 colpi a 0.75 e varianza 0.55. Neanche la latenza tra pressione e primo colpo viene misurata: il modello assume primo colpo immediato. Non sono compensate dispersione casuale, movimento del giocatore o shake visuale.
 
@@ -49,11 +51,11 @@ L'output conserva i punti **simulati** dei colpi e arrotonda la posizione cumula
 
 La modalita' senza sparare supporta solo full-auto, modalita' primaria senza zoom/burst, caricatore pieno e recoil azzerato. Per altri casi si ferma. Restano i controlli build 14189, `-insecure`, IsValveDS e presenza del modulo server locale; quest'ultimo non dimostra da solo che nessun client remoto sia connesso: usa una mappa offline. Il processo e' esterno e in sola lettura; nessuna DLL, hook, scrittura nella memoria del gioco o simulazione di input. Bloody esegue l'AMC, non questo programma.
 
-## Verifiche e distribuzione V0.3.4
+## Verifiche e distribuzione V0.3.5
 
-`build.ps1` compila l'EXE x64 con .NET Framework su Windows. GitHub Actions esegue i controlli esistenti, il golden XML e i nuovi test del percorso realmente usato da F8: XML-only, AMC-only, JSON nel converter, AMC originale nel converter e registrazione. Verifica anche cleanup del master temporaneo, errori, calibrazione, scelta e pulsante UI. **CS2, Bloody e Synapse non vengono avviati in CI.** La lettura live e l'esecuzione della nuova build rimangono da provare sul PC dell'utente.
+`build.ps1` compila l'EXE x64 con .NET Framework su Windows. GitHub Actions esegue i controlli esistenti, il golden XML e i test del percorso realmente usato da F8: XML-only, AMC-only, JSON nel converter, AMC originale nel converter e registrazione. La nuova regressione riproduce i due nomi del report in memoria di test, verifica i parametri della variante e l'estrazione XML con reimportazione JSON, e rifiuta ID o nomi incompatibili. Verifica anche cleanup del master temporaneo, errori, calibrazione, scelta e pulsante UI. **CS2, Bloody e Synapse non vengono avviati in CI.** La lettura live e l'esecuzione della nuova build rimangono da provare sul PC dell'utente.
 
-Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. Gli esempi sono separati nelle cartelle `AMC` e `XML`. `AMC/Esempio_NoFire_SINTETICO` contiene parametri AK costruiti dal test, NON estratti da una sessione live. `XML/M249_GOLDEN_EXPORT.xml` e' il risultato del test golden ricostruito, non un'estrazione live. I download della V0.3.4 vengono pubblicati in `Downloads/V0.3.4` solo dopo i controlli.
+Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. Gli esempi sono separati nelle cartelle `AMC` e `XML`. `AMC/Esempio_NoFire_SINTETICO` contiene parametri AK costruiti dal test, NON estratti da una sessione live. `XML/M249_GOLDEN_EXPORT.xml` e' il risultato del test golden ricostruito, non un'estrazione live. I download della V0.3.5 vengono pubblicati in `Downloads/V0.3.5` solo dopo i controlli.
 
 Fonti tecniche: [schema della build fissata](https://github.com/a2x/cs2-dumper/tree/4116de000e085d62bbd42334c67b35bda37bda4f/output), [implementazione legacy della tabella](https://github.com/SwagSoftware/Kisak-Strike/blob/master/game/shared/cstrike15/cs_weapon_parse.cpp) e [stream legacy](https://github.com/SwagSoftware/Kisak-Strike/blob/master/vstdlib/random.cpp). Le fonti legacy non sono una prova dell'implementazione attuale di CS2.
 
@@ -65,7 +67,7 @@ Il report del 7 ottobre rilevava la build 14189 e il blocco previsto della V0.3.
 
 Aggiornati i cinque indirizzi globali usati da client.dll: sensibilita', pawn, controller, angoli e regole. I campi schema usati da arma, VData e recoil risultano invariati. Restano le verifiche di build, sessione, puntatori e dati plausibili; il puntatore VData non-schema continua a richiedere la validazione live esistente.
 
-`AmcConverter.cs`, `AmcInput.cs`, `RecoilDynamics.cs` e `NoFireGenerator.cs` restano identici alla V0.3.1 e alla V0.3.2. La correzione dei delay di 1 ms/MoveR e il modello non vengono modificati. Il campo Version degli snapshot resta 0.3.1 come versione del generatore invariato, mentre interfaccia e assembly sono V0.3.4. Il nuovo exporter XML e' separato; il layout resta quello della V0.3.2. La lettura della build 14189 richiede una prova live dell'utente.
+`AmcConverter.cs`, `AmcInput.cs` e `RecoilDynamics.cs` restano identici alla V0.3.1. In `NoFireGenerator.cs` cambia soltanto il controllo del nome dentro `WeaponDataReader.ReadParameters`; RNG, modello, ricostruzione e generazione AMC sono identici. Il nuovo helper `WeaponVDataIdentity` vincola l'alias M4A1-S all'ID 60. Il campo Version degli snapshot resta 0.3.1 come versione del generatore invariato, mentre interfaccia e assembly sono V0.3.5. Il layout resta quello della V0.3.2 e il selettore/export XML quello della V0.3.4. La lettura live della M4A1-S richiede una nuova prova sul PC dell'utente.
 
 I test controllano ogni costante schema/globale del layout contro un manifest fissato al dump 14189. Le costanti non-schema vengono conservate con i controlli runtime esistenti. Gli input diagnostici storici 14188 restano tali: non vengono rinominati come registrazioni 14189.
 

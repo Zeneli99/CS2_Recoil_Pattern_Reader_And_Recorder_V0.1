@@ -12,8 +12,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: System.Reflection.AssemblyTitle("CS2 Recoil Probe")]
-[assembly: System.Reflection.AssemblyVersion("0.3.4.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.3.4.0")]
+[assembly: System.Reflection.AssemblyVersion("0.3.5.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.3.5.0")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("CoreChecks")]
 
 namespace RecoilProbe {
