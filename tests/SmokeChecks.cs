@@ -34,7 +34,7 @@ internal static class SmokeChecks {
    Assembly program = Assembly.LoadFrom(executable);
    Check(IntPtr.Size == 8, "Windows x64 test process");
    Check(program.GetName().ProcessorArchitecture == ProcessorArchitecture.Amd64, "EXE targets AMD64");
-   Check(program.GetName().Version.ToString() == "0.3.3.0", "Version 0.3.3.0");
+   Check(program.GetName().Version.ToString() == "0.3.4.0", "Version 0.3.4.0");
    Check(program.EntryPoint.IsDefined(typeof(STAThreadAttribute), false), "GUI entry point uses STA");
    Type native = program.GetType("RecoilProbe.Native", true);
    uint rights = (uint)native.GetField("ReadOnlyRights", Static).GetRawConstantValue();
@@ -75,9 +75,14 @@ internal static class SmokeChecks {
     Check(weapon.ReadOnly, "Weapon field is automatic");
     Button record = (Button)mainType.GetField("record", Member).GetValue(form);
     Check(record.Text.Contains("F8")&&record.Text.Contains("ESTRAI"), "Main F8 action extracts without starting a recorder");
-    CheckBox exportXml=(CheckBox)mainType.GetField("exportXml",Member).GetValue(form);
-    Check(exportXml.Enabled&&!exportXml.Checked&&exportXml.Text.Contains("Synapse 4"),
-     "Main exposes optional Synapse 4 XML export without changing the default AMC action");
+    ComboBox format=(ComboBox)mainType.GetField("format",Member).GetValue(form);
+    Check(format.Enabled&&format.Items.Count==2&&format.Items[0].ToString()=="AMC"&&format.Items[1].ToString()=="XML Razer",
+     "Main offers an exclusive AMC or XML Razer output choice");
+    format.SelectedIndex=1;
+    Check(record.Text=="ESTRAI XML · F8","Choosing XML updates the main F8 extraction action");
+    format.SelectedIndex=0;
+    Check(record.Text=="ESTRAI AMC · F8","Choosing AMC restores the AMC extraction action");
+    format.SelectedIndex=1;
     Button report=(Button)mainType.GetField("report",Member).GetValue(form);
     Check(report.Text=="REPORT" && report.Right<=form.ClientSize.Width,"Startup diagnostic button fits the compact window");
     form.Show();

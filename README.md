@@ -1,10 +1,10 @@
-# RecoilLabs / CS2 Recoil Reader & Recorder V0.3.3 — XML Razer Synapse 4
+# RecoilLabs / CS2 Recoil Reader & Recorder V0.3.4 — scelta AMC / XML Razer
 
-La V0.3.3 aggiunge l'export XML per **Razer Synapse 4** secondo la calibrazione M249 verificata in gioco dall'utente sul Naga V3 Pro. Mantiene la compatibilita' CS2 14189 della V0.3.2 e i motori AMC identici alla V0.3.1. L'AMC e' il master: l'export XML legge il file gia' salvato e non modifica X/Y, ordine o numero dei MoveR.
+La V0.3.4 sostituisce la spunta aggiuntiva della V0.3.3 con una scelta esplicita **Formato: AMC / XML Razer**, nella schermata principale, nel converter e nel recorder. Mantiene la compatibilita' CS2 14189 e i motori AMC identici alla V0.3.1. La calibrazione XML rimane quella M249 verificata in gioco dall'utente sul Naga V3 Pro: stessi X/Y e tempi Delay +1 ms per ciascun MoveR.
 
-Seleziona **Esporta anche XML Razer · Synapse 4** nella schermata principale o nel converter; nel recorder usa **XML Razer** insieme a **Genera AMC**. I file vengono salvati in sottocartelle sorelle **AMC** e **XML** della cartella scelta. I parametri e report AMC rimangono accanto al master. L'opzione XML parte disattivata; il risultato AMC non dipende dall'opzione. Se l'XML fallisce, l'AMC gia' salvato viene conservato e l'errore viene mostrato.
+Seleziona **XML Razer** per salvare soltanto `.xml` e report nella sottocartella **XML**; seleziona **AMC** per salvare soltanto `.amc` e report nella sottocartella **AMC**. Le due cartelle restano separate. I parametri estratti `.recoil.json` vengono conservati accanto al formato selezionato anche se la successiva conversione fallisce. Il pulsante principale mostra **ESTRAI XML · F8** o **ESTRAI AMC · F8**. La scelta viene ricordata in `%LOCALAPPDATA%/RecoilLabs/ExportFormat.txt` e ripresa quando si apre uno strumento o si riavvia il programma. Un errore XML viene mostrato come errore dell'esportazione selezionata e registrato nella diagnostica; non viene sostituito da un messaggio di successo AMC.
 
-Per convertire un AMC esistente direttamente, aprilo nel converter e premi **XML RAZER DA AMC**. Questo pulsante conserva tutti i comandi originali, anche consecutivi; non usa lo smoothing o i controlli di sensibilita'. **CONVERTI IN AMC**, con l'opzione XML attiva, mantiene invece il comportamento del converter esistente e deriva l'XML dall'AMC risultante. Un eventuale cambio di sensibilita' avviene nell'AMC tramite il converter esistente; l'XML non aggiunge un altro fattore.
+Per convertire un AMC esistente, aprilo nel converter, scegli **XML Razer** e premi **ESPORTA XML RAZER**. Questo percorso conserva tutti i comandi originali, anche consecutivi, e disabilita il cambio di sensibilita': non passa attraverso lo smoothing. Scegliendo **AMC**, **CONVERTI IN AMC** mantiene il converter precedente. Con parametri/registrazioni, l'XML viene derivato da un AMC temporaneo prodotto dal generatore invariato, poi rimosso: non viene eseguita una seconda ricostruzione della traiettoria e non serve un AMC visibile nella cartella di output. Un eventuale cambio di sensibilita' sul JSON/CSV viene applicato dal generatore esistente; l'XML non aggiunge un altro fattore.
 
 ## Calibrazione Synapse 4
 
@@ -14,7 +14,7 @@ Il formato replica il golden verificato: `mmtSetting=3`, `MouseMoveType=relative
 
 Il golden M249 fornito e' `tests/fixtures/M249_Razer_Synapse4_CAL1_MoveCost1ms.xml`: **765 MoveR, X +25, Y +448, 7155 ms di Delay prima dell'ultimo movimento +765 ms =7920 ms di traiettoria**, poi **79 ms** fino a LeftUp (rilascio a 7999 ms). L'utente ha confermato il test in gioco. I test della nuova implementazione confrontano tutti i Buffer con questo file e verificano anche comandi consecutivi, costo gia' dichiarato, rilascio e assenza di modifiche al master. Il file AMC originale non e' stato materializzabile (403): il test M249 usa una fixture esplicitamente ricostruita dal golden XML, non pretende di confrontare i byte del master originale. Il golden XML resta nei test e non viene incorporato nell'EXE.
 
-Ogni XML ha un `.report.json` nella cartella XML, con percorso e SHA256 del master, numero di movimenti, X/Y, somma dei Delay, costo MoveR, tempo della traiettoria, tempo di rilascio e pausa omessa. L'export non esegue macro o input del mouse.
+Ogni XML ha un `.report.json` nella cartella XML, con SHA256 del master, numero di movimenti, X/Y, somma dei Delay, costo MoveR, tempo della traiettoria, tempo di rilascio e pausa omessa. Se il master e' un AMC esistente vengono conservati anche percorso e `MasterAmcStored=true`; con generazione XML-only il master e' temporaneo, `MasterAmcStored=false` e il percorso e' null. L'export non esegue macro o input del mouse.
 
 ## Generazione AMC invariata
 
@@ -24,16 +24,16 @@ La traiettoria, i punti dei colpi, la sensibilità, lo smoothing moderato e il r
 
 I report AMC esistenti mantengono `CommandTimingMeasured=false`; la calibrazione Razer e la verifica M249 fornite dall'utente vengono documentate nel report XML separato. Il modello senza sparare rimane sperimentale: legge VData reali ma ricostruisce impulsi e angoli. La verifica M249 della conversione tra dispositivi non prova la correttezza di tutte le nuove traiettorie generate. Il codice della generazione e i metadati AMC preesistenti non sono stati modificati.
 
-I controlli includono uno stream AMC golden indipendente, 300 comandi senza deriva del clock, delta divisi, conversione sensibilità, reimportazione e preservazione dei punti simulati/registrati. EXE e sorgenti completi sono pubblicati in `Downloads/V0.3.3` dopo la compilazione e i controlli Windows.
+I controlli includono uno stream AMC golden indipendente, 300 comandi senza deriva del clock, delta divisi, conversione sensibilità, reimportazione e preservazione dei punti simulati/registrati. EXE e sorgenti completi sono pubblicati in `Downloads/V0.3.4` dopo la compilazione e i controlli Windows.
 
-La schermata principale non avvia piu' una registrazione: **ESTRAI + AMC / F8** legge i parametri VData dell'arma attiva e crea una macro di prova senza sparare. Il recorder precedente rimane separato in **RECORDER / TEST**, solo per confronto e diagnostica.
+La schermata principale non avvia piu' una registrazione: **ESTRAI / F8** legge i parametri VData dell'arma attiva e crea il formato selezionato senza sparare. Il recorder precedente rimane separato in **RECORDER / TEST**, solo per confronto e diagnostica.
 
-## Prova rapida V0.3.3
+## Prova rapida V0.3.4
 
-1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3.3_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.3.exe`.
+1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3.4_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.4.exe`.
 2. Avvia CS2 con `-insecure`, in una mappa offline ospitata nello stesso processo. Per la prima prova usa AK47.
 3. Ricarica completamente, togli zoom/burst, lascia il sinistro rilasciato e aspetta il reset del recoil.
-4. Se desideri l'XML, seleziona **Esporta anche XML Razer · Synapse 4**, poi premi **F8 senza sparare**. In `Estrazioni/AMC` trovi `.amc`, `.recoil.json` e `.report.json`; l'XML opzionale e il suo report sono in `Estrazioni/XML`.
+4. Scegli **Formato: AMC** oppure **XML Razer**, poi premi **F8 senza sparare**. Il formato selezionato, `.recoil.json` e `.report.json` si trovano in `Estrazioni/AMC` oppure `Estrazioni/XML`.
 5. Importa l'AMC in Bloody nella modalita' finche' tieni premuto. La macro e' sperimentale: questo passaggio e' una prova reale, non una verifica gia' eseguita.
 6. Se l'estrazione fallisce, premi REPORT e conserva `Diagnostica_CS2.txt`. Se il movimento non corrisponde, conserva i due JSON insieme all'AMC: contengono i valori usati, non occorre ricreare lo spray per rigenerare il file.
 
@@ -49,11 +49,11 @@ L'output conserva i punti **simulati** dei colpi e arrotonda la posizione cumula
 
 La modalita' senza sparare supporta solo full-auto, modalita' primaria senza zoom/burst, caricatore pieno e recoil azzerato. Per altri casi si ferma. Restano i controlli build 14189, `-insecure`, IsValveDS e presenza del modulo server locale; quest'ultimo non dimostra da solo che nessun client remoto sia connesso: usa una mappa offline. Il processo e' esterno e in sola lettura; nessuna DLL, hook, scrittura nella memoria del gioco o simulazione di input. Bloody esegue l'AMC, non questo programma.
 
-## Verifiche e distribuzione V0.3.3
+## Verifiche e distribuzione V0.3.4
 
-`build.ps1` compila l'EXE x64 con .NET Framework su Windows. GitHub Actions esegue i controlli esistenti e quelli nuovi su lettura VData nel solo processo di test, errori di puntatore/nome/flag, RNG, primo impulso confrontato con la fixture AK, ripetibilita', JSON, tempi, sensibilita', punti simulati e anteprime. **CS2 e Bloody non vengono avviati in CI.** Il primo impulso coincidente non dimostra che l'intero algoritmo corrente sia corretto.
+`build.ps1` compila l'EXE x64 con .NET Framework su Windows. GitHub Actions esegue i controlli esistenti, il golden XML e i nuovi test del percorso realmente usato da F8: XML-only, AMC-only, JSON nel converter, AMC originale nel converter e registrazione. Verifica anche cleanup del master temporaneo, errori, calibrazione, scelta e pulsante UI. **CS2, Bloody e Synapse non vengono avviati in CI.** La lettura live e l'esecuzione della nuova build rimangono da provare sul PC dell'utente.
 
-Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. Gli esempi sono separati nelle cartelle `AMC` e `XML`. `AMC/Esempio_NoFire_SINTETICO` contiene parametri AK costruiti dal test, NON estratti da una sessione live. `XML/M249_GOLDEN_EXPORT.xml` e' il risultato del test golden ricostruito, non un'estrazione live. I download della V0.3.3 vengono pubblicati in `Downloads/V0.3.3` solo dopo i controlli.
+Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. Gli esempi sono separati nelle cartelle `AMC` e `XML`. `AMC/Esempio_NoFire_SINTETICO` contiene parametri AK costruiti dal test, NON estratti da una sessione live. `XML/M249_GOLDEN_EXPORT.xml` e' il risultato del test golden ricostruito, non un'estrazione live. I download della V0.3.4 vengono pubblicati in `Downloads/V0.3.4` solo dopo i controlli.
 
 Fonti tecniche: [schema della build fissata](https://github.com/a2x/cs2-dumper/tree/4116de000e085d62bbd42334c67b35bda37bda4f/output), [implementazione legacy della tabella](https://github.com/SwagSoftware/Kisak-Strike/blob/master/game/shared/cstrike15/cs_weapon_parse.cpp) e [stream legacy](https://github.com/SwagSoftware/Kisak-Strike/blob/master/vstdlib/random.cpp). Le fonti legacy non sono una prova dell'implementazione attuale di CS2.
 
@@ -65,7 +65,7 @@ Il report del 7 ottobre rilevava la build 14189 e il blocco previsto della V0.3.
 
 Aggiornati i cinque indirizzi globali usati da client.dll: sensibilita', pawn, controller, angoli e regole. I campi schema usati da arma, VData e recoil risultano invariati. Restano le verifiche di build, sessione, puntatori e dati plausibili; il puntatore VData non-schema continua a richiedere la validazione live esistente.
 
-`AmcConverter.cs`, `AmcInput.cs`, `RecoilDynamics.cs` e `NoFireGenerator.cs` restano identici alla V0.3.1 e alla V0.3.2. La correzione dei delay di 1 ms/MoveR e il modello non vengono modificati. Il campo Version degli snapshot resta 0.3.1 come versione del generatore invariato, mentre interfaccia e assembly sono V0.3.3. Il nuovo exporter XML e' separato; il layout resta quello della V0.3.2. La lettura della build 14189 richiede una prova live dell'utente.
+`AmcConverter.cs`, `AmcInput.cs`, `RecoilDynamics.cs` e `NoFireGenerator.cs` restano identici alla V0.3.1 e alla V0.3.2. La correzione dei delay di 1 ms/MoveR e il modello non vengono modificati. Il campo Version degli snapshot resta 0.3.1 come versione del generatore invariato, mentre interfaccia e assembly sono V0.3.4. Il nuovo exporter XML e' separato; il layout resta quello della V0.3.2. La lettura della build 14189 richiede una prova live dell'utente.
 
 I test controllano ogni costante schema/globale del layout contro un manifest fissato al dump 14189. Le costanti non-schema vengono conservate con i controlli runtime esistenti. Gli input diagnostici storici 14188 restano tali: non vengono rinominati come registrazioni 14189.
 

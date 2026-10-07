@@ -27,10 +27,10 @@ jobs:
       - name: Upload EXE and complete ZIP
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: CS2-Recoil-Reader-Recorder-V0.3.3-x64
+          name: CS2-Recoil-Reader-Recorder-V0.3.4-x64
           path: |
-            dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.3.exe
-            dist/CS2_Recoil_Reader_Recorder_V0.3.3_FULL.zip
+            dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.4.exe
+            dist/CS2_Recoil_Reader_Recorder_V0.3.4_FULL.zip
             dist/VERIFY.txt
             dist/UI_PREVIEW.png
             dist/UI_CONVERTER.png
@@ -59,8 +59,8 @@ jobs:
           }
           $parent = Invoke-RestMethod -Uri "$apiBase/git/commits/$env:GITHUB_SHA" -Headers $headers
           $assets = @(
-            @{ local='dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.3.exe'; name='CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.3.exe' },
-            @{ local='dist/CS2_Recoil_Reader_Recorder_V0.3.3_FULL.zip'; name='CS2_Recoil_Reader_Recorder_V0.3.3_FULL.zip' },
+            @{ local='dist/CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.4.exe'; name='CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.4.exe' },
+            @{ local='dist/CS2_Recoil_Reader_Recorder_V0.3.4_FULL.zip'; name='CS2_Recoil_Reader_Recorder_V0.3.4_FULL.zip' },
             @{ local='dist/VERIFY.txt'; name='VERIFY.txt' },
             @{ local='dist/UI_PREVIEW.png'; name='UI_PREVIEW.png' },
             @{ local='dist/UI_CONVERTER.png'; name='UI_CONVERTER.png' },
@@ -75,14 +75,14 @@ jobs:
           foreach ($asset in $assets) {
             $bytes = [System.IO.File]::ReadAllBytes((Join-Path $env:GITHUB_WORKSPACE $asset.local))
             $blob = GitHubPost 'git/blobs' @{ content=[Convert]::ToBase64String($bytes); encoding='base64' }
-            $entries += @{ path=("Downloads/V0.3.3/" + $asset.name); mode='100644'; type='blob'; sha=$blob.sha }
+            $entries += @{ path=("Downloads/V0.3.4/" + $asset.name); mode='100644'; type='blob'; sha=$blob.sha }
             $hash = (Get-FileHash -LiteralPath $asset.local -Algorithm SHA256).Hash
             $hashLines += "$hash  $($asset.name)"
           }
           $hashBlob = GitHubPost 'git/blobs' @{ content=($hashLines -join [char]10) + [char]10; encoding='utf-8' }
-          $entries += @{ path='Downloads/V0.3.3/SHA256.txt'; mode='100644'; type='blob'; sha=$hashBlob.sha }
+          $entries += @{ path='Downloads/V0.3.4/SHA256.txt'; mode='100644'; type='blob'; sha=$hashBlob.sha }
           $tree = GitHubPost 'git/trees' @{ base_tree=$parent.tree.sha; tree=$entries }
-          $commit = GitHubPost 'git/commits' @{ message='Publish verified V0.3.3 EXE, full source ZIP and checks [skip ci]'; tree=$tree.sha; parents=@($env:GITHUB_SHA) }
+          $commit = GitHubPost 'git/commits' @{ message='Publish verified V0.3.4 EXE, full source ZIP and checks [skip ci]'; tree=$tree.sha; parents=@($env:GITHUB_SHA) }
           $check = Invoke-RestMethod -Uri "$apiBase/git/ref/heads/main" -Headers $headers
           if ($check.object.sha -ne $env:GITHUB_SHA) { throw 'Branch advanced; verified artifact remains available in this run.' }
           Invoke-RestMethod -Uri "$apiBase/git/refs/heads/main" -Method Patch -Headers $headers -ContentType 'application/json' -Body (@{ sha=$commit.sha; force=$false } | ConvertTo-Json -Compress) | Out-Null

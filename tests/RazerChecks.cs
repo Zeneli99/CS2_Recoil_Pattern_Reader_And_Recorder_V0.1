@@ -143,14 +143,14 @@ internal static class RazerChecks {
   using(RecorderForm form=new RecorderForm()) {
    System.Reflection.BindingFlags flags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
    System.Windows.Forms.CheckBox amcBox=(System.Windows.Forms.CheckBox)typeof(RecorderForm).GetField("autoAmc",flags).GetValue(form);
-   System.Windows.Forms.CheckBox xmlBox=(System.Windows.Forms.CheckBox)typeof(RecorderForm).GetField("exportXml",flags).GetValue(form);
-   check(amcBox.Checked&&xmlBox.Enabled&&!xmlBox.Checked,"Recorder starts with its AMC behavior preserved and XML optional");
-   amcBox.Checked=false;check(!xmlBox.Enabled,"Recorder XML cannot be selected without an AMC master");
+   System.Windows.Forms.ComboBox choice=(System.Windows.Forms.ComboBox)typeof(RecorderForm).GetField("format",flags).GetValue(form);
+   check(amcBox.Checked&&choice.Enabled&&choice.Items.Count==2,"Recorder offers the same exclusive AMC/XML choice");
+   amcBox.Checked=false;check(!choice.Enabled,"Recorder format is disabled when macro generation is off");
    amcBox.Checked=true;
    typeof(RecorderForm).GetMethod("SetExecutionTest",flags).Invoke(form,new object[] {AmcInput.Load(smooth)});
-   check(!amcBox.Enabled&&!xmlBox.Enabled,"AMC execution diagnostic mode disables both output options");
+   check(!amcBox.Enabled&&!choice.Enabled,"AMC execution diagnostic mode disables generation and format selection");
    typeof(RecorderForm).GetMethod("SetExecutionTest",flags).Invoke(form,new object[] {null});
-   check(amcBox.Enabled&&xmlBox.Enabled,"Leaving diagnostic mode restores optional XML export");
+   check(amcBox.Enabled&&choice.Enabled,"Leaving diagnostic mode restores format selection");
    form.Show();System.Windows.Forms.Application.DoEvents();form.Refresh();
    bool bounds=true;
    foreach(System.Windows.Forms.Control child in form.Controls)bounds&=child.Left>=0&&child.Top>=0&&child.Right<=540&&child.Bottom<=360;

@@ -15,7 +15,7 @@ namespace RecoilProbe {
   internal volatile bool StopRequested;
   private readonly string directory;
   private readonly bool autoAmc;
-  private readonly bool autoXml;
+  private readonly MacroFormat outputFormat;
   private readonly AmcInput expectedAmc;
   private readonly Action<string> status;
   private readonly Action<GameIdentity> identity;
@@ -24,10 +24,10 @@ namespace RecoilProbe {
   internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected)
    : this(folder,exportAmc,progress,detected,null) { }
   internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected,AmcInput test)
-   : this(folder,exportAmc,progress,detected,test,false) { }
-  internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected,AmcInput test,bool exportXml) {
+   : this(folder,exportAmc,progress,detected,test,MacroFormat.Amc) { }
+  internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected,AmcInput test,MacroFormat format) {
    directory=folder;autoAmc=exportAmc&&test==null;status=progress;identity=detected;expectedAmc=test;
-   autoXml=exportXml&&autoAmc;
+   outputFormat=format;
   }
   internal CaptureResult Run() {
    using(Game game=new Game()) {
@@ -139,15 +139,10 @@ namespace RecoilProbe {
      RecordingData data=RecordingData.FromSamples(samples,meta);data.SourcePath=result.CsvPath;
      string amcPath=Path.Combine(directory,"AMC",name+"_SENS_"+
       info.Sensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+".amc");
-     AmcResult converted=AmcConverter.Convert(data,amcPath,info.Sensitivity);
-     result.AmcPath=converted.AmcPath;meta["amc_generated"]=true;meta["amc_result"]=converted;
-    } catch(Exception ex){result.AmcError=ex.Message;}
-   }
-   if(autoXml&&result.AmcPath!=null) {
-    try {
-     RazerXmlResult xml=RazerXmlExporter.Export(result.AmcPath,OutputFolders.Xml(result.AmcPath));
-     result.XmlPath=xml.XmlPath;meta["razer_xml_result"]=xml;
-    } catch(Exception ex){result.XmlError=ex.Message;}
+     MacroExportResult saved=MacroExport.Save(outputFormat,amcPath,delegate(string master){return AmcConverter.Convert(data,master,info.Sensitivity);});
+     if(saved.Xml!=null){result.XmlPath=saved.Xml.XmlPath;meta["razer_xml_result"]=saved.Xml;}
+     else {result.AmcPath=saved.Amc.AmcPath;meta["amc_generated"]=true;meta["amc_result"]=saved.Amc;}
+    } catch(Exception ex){if(outputFormat==MacroFormat.XmlRazer)result.XmlError=ex.Message;else result.AmcError=ex.Message;Diagnostics.Record(ex);}
    }
    RecordingIO.WriteJson(result.MetadataPath,meta);
    return result;

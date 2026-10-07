@@ -24,6 +24,7 @@ namespace RecoilProbe {
   public int MmtSetting=3,MoveRCommandCostMs=1,MoveCommands,TotalX,TotalY;
   public int DelayBeforeLastMoveMs,MovementDurationMs,ReleaseDelayMs,ReleaseTimeMs,IgnoredTailMs;
   public bool CoordinatesScaled=false,MovementResampled=false,MasterAmcModified=false;
+  public bool MasterAmcStored=true;
   public string Timing="Raw AMC delays plus 1 ms for EACH MoveR. The AMC timing tag is not applied again.";
   public string Calibration="User-verified M249 Synapse 4 reference: 765 MoveR, +25/+448, 7155+765=7920 ms movement, then 79 ms release delay.";
  }
@@ -104,6 +105,9 @@ namespace RecoilProbe {
    Selected(writer);writer.WriteElementString("isPairing","false");writer.WriteEndElement();
   }
   internal static RazerXmlResult Export(string masterAmc,string output) {
+   return Export(masterAmc,output,false);
+  }
+  internal static RazerXmlResult Export(string masterAmc,string output,bool temporaryMaster) {
    string master=Path.GetFullPath(masterAmc),path=Path.GetFullPath(output);
    if(!String.Equals(Path.GetExtension(master),".amc",StringComparison.OrdinalIgnoreCase)||
     !String.Equals(Path.GetExtension(path),".xml",StringComparison.OrdinalIgnoreCase))
@@ -114,7 +118,8 @@ namespace RecoilProbe {
     using(MemoryStream copy=new MemoryStream()){stream.CopyTo(copy);input=copy.ToArray();}
    }
    RazerXmlResult result=new RazerXmlResult {MasterAmcPath=master,XmlPath=path,
-    ReportPath=Path.ChangeExtension(path,".report.json")};
+    ReportPath=Path.ChangeExtension(path,".report.json"),MasterAmcStored=!temporaryMaster};
+   if(temporaryMaster)result.MasterAmcPath=null;
    using(SHA256 hash=SHA256.Create())result.MasterAmcSha256=BitConverter.ToString(hash.ComputeHash(input)).Replace("-","").ToLowerInvariant();
    List<Buffer> buffers=Read(input,result);
    if(File.Exists(path)||File.Exists(result.ReportPath))throw new InvalidOperationException("Output XML gia' esistente. Scegli un nome nuovo.");

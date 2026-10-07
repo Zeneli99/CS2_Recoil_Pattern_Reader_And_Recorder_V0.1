@@ -8,7 +8,7 @@ $buildOutput = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 } else { [System.IO.Path]::GetFullPath((Join-Path $buildRoot $OutputDirectory)) }
 [void][System.IO.Directory]::CreateDirectory($buildOutput)
-$buildExeName = 'CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.3.exe'
+$buildExeName = 'CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.4.exe'
 $buildExe = Join-Path $buildOutput $buildExeName
 $buildReferences = @('/r:System.dll','/r:System.Core.dll','/r:System.Drawing.dll',
     '/r:System.Windows.Forms.dll','/r:System.Management.dll','/r:System.Web.Extensions.dll',
@@ -20,6 +20,7 @@ $buildArguments = @('/nologo','/codepage:65001','/target:winexe','/platform:x64'
     (Join-Path $buildRoot 'src/NoFireGenerator.cs'), (Join-Path $buildRoot 'src/ExtractorForm.cs'),
     (Join-Path $buildRoot 'src/RecoilDynamics.cs'), (Join-Path $buildRoot 'src/AmcConverter.cs'),
     (Join-Path $buildRoot 'src/AmcInput.cs'), (Join-Path $buildRoot 'src/RazerXmlExporter.cs'),
+    (Join-Path $buildRoot 'src/MacroExport.cs'),
     (Join-Path $buildRoot 'src/Recorder.cs'), (Join-Path $buildRoot 'src/AmcExecutionCheck.cs'),
     (Join-Path $buildRoot 'src/UserInterface.cs'), (Join-Path $buildRoot 'src/Diagnostics.cs'))
 & $buildCompiler @buildArguments
@@ -39,7 +40,7 @@ $buildCoreArguments = @('/nologo','/codepage:65001','/target:exe','/platform:x64
     ('/out:' + $buildCore), ('/r:' + $buildExe)) + $buildReferences +
     @((Join-Path $buildRoot 'tests/CoreChecks.cs'), (Join-Path $buildRoot 'tests/NoFireChecks.cs'),
       (Join-Path $buildRoot 'tests/AmcTimingChecks.cs'), (Join-Path $buildRoot 'tests/LayoutChecks.cs'),
-      (Join-Path $buildRoot 'tests/RazerChecks.cs'))
+      (Join-Path $buildRoot 'tests/RazerChecks.cs'), (Join-Path $buildRoot 'tests/ExportSelectionChecks.cs'))
 & $buildCompiler @buildCoreArguments
 if ($LASTEXITCODE -ne 0) { throw 'Conversion check compilation failed.' }
 $buildCoreOutput = Join-Path $buildOutput 'ConversionChecks'
@@ -53,7 +54,7 @@ Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_CONVERTER_AMC.png') -Dest
 Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_CONVERTER_NO_FIRE.png') -Destination $buildOutput -Force
 Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_RECORDER.png') -Destination $buildOutput -Force
 
-$buildPackage = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.3_FULL'
+$buildPackage = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.4_FULL'
 [void][System.IO.Directory]::CreateDirectory($buildPackage)
 Copy-Item -LiteralPath $buildExe -Destination $buildPackage -Force
 foreach ($buildItem in @('Avvia.cmd','LEGGIMI.txt','a2x-LICENSE.txt','README.md','ANALISI_AK47.md')) {
@@ -97,7 +98,7 @@ foreach ($buildItem in @('build.ps1','Avvia.cmd','LEGGIMI.txt','a2x-LICENSE.txt'
 }
 $buildCommit = if ([string]::IsNullOrWhiteSpace($env:GITHUB_SHA)) { 'local build' } else { $env:GITHUB_SHA }
 $buildInfo = @(
-    'CS2 Recoil Pattern Reader And Recorder V0.3.3 EXPERIMENTAL',
+    'CS2 Recoil Pattern Reader And Recorder V0.3.4 EXPERIMENTAL',
     ('Commit: ' + $buildCommit),
     ('UTC: ' + [DateTime]::UtcNow.ToString('o')),
     'Platform: Windows x64, .NET Framework',
@@ -105,6 +106,8 @@ $buildInfo = @(
     'No-fire VData extraction tested only against allocated test-process memory; live CS2 VData: NOT TESTED',
     'No-fire legacy reconstruction and AMC export tested for simulated shot anchors, moderate 10ms output and JSON reimport',
     'AMC generator/converter unchanged from V0.3.2; existing 1ms/MoveR convention preserved',
+    'Exclusive AMC/XML selector controls main F8, converter and recorder; XML-only uses an unchanged temporary AMC master',
+    'Selected-format extraction/conversion, XML-only output and master cleanup tested end-to-end without live CS2',
     'Synapse 4 XML: cumulative relative buffers, raw AMC Delay + 1ms per MoveR, release delay preserved, no anti-repeat tail',
     'User M249 calibration verified in game by user: 765 moves, X+25 Y+448, 7155+765=7920ms movement plus 79ms to release',
     'New exporter compared against attached golden XML; original M249 AMC could not be materialized here (403)',
@@ -119,7 +122,7 @@ $buildHash = (Get-FileHash -LiteralPath $buildExe -Algorithm SHA256).Hash
 ($buildHash + '  ' + $buildExeName) | Set-Content -LiteralPath (Join-Path $buildPackage 'SHA256.txt') -Encoding ASCII
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$buildZip = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.3_FULL.zip'
+$buildZip = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.4_FULL.zip'
 if (Test-Path -LiteralPath $buildZip) { throw 'ZIP already exists; choose a fresh output directory.' }
 Add-Type -AssemblyName System.IO.Compression
 $buildStream = [System.IO.File]::Open($buildZip, [System.IO.FileMode]::CreateNew)
