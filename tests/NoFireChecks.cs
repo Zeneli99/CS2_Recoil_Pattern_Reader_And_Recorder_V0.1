@@ -124,6 +124,76 @@ internal static class NoFireChecks {
     check(File.Exists(m4Xml.OutputPath)&&m4Xml.Xml.MoveCommands>0&&WeaponSnapshotIO.TryLoad(savedParameters,out m4Roundtrip)&&
      m4Roundtrip.Weapon=="M4A1_S"&&m4Roundtrip.Native.ItemDefinitionIndex==60&&m4Roundtrip.Native.DesignerName=="weapon_m4a1_silencer",
      "M4A1-S parameters read through the reported alias proceed through selected XML extraction and JSON reimport");
+    // Distinct synthetic values catch wrong indexing independently for all five CFiringModeFloat fields.
+    WriteFloat(vdata,Layout.VDataCycle+4,0.12F);WriteFloat(vdata,Layout.VDataRecoilAngle+4,-10);
+    WriteFloat(vdata,Layout.VDataRecoilAngleVariance+4,55);WriteFloat(vdata,Layout.VDataRecoilMagnitude+4,21);
+    WriteFloat(vdata,Layout.VDataRecoilMagnitudeVariance+4,2);Marshal.WriteInt32(weapon,Layout.WeaponMode,1);
+    WeaponParameters alternate=WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);
+    check(alternate.Mode==1&&alternate.CycleSeconds==0.12F&&alternate.RecoilAngle==-10&&alternate.AngleVariance==55&&
+     alternate.RecoilMagnitude==21&&alternate.MagnitudeVariance==2&&alternate.MaxClip==20&&alternate.RecoilSeed==555,
+     "M4A1-S mode 1 selects the second float of every cycle/recoil field and preserves the raw mode");
+    Marshal.WriteInt32(weapon,Layout.WeaponMode,0);
+    WeaponParameters primary=WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);
+    check(primary.Mode==0&&primary.CycleSeconds==0.1F&&primary.RecoilAngle==0&&primary.AngleVariance==70&&
+     primary.RecoilMagnitude==30&&primary.MagnitudeVariance==0,
+     "M4A1-S mode 0 still reads all original primary values without mixing the two variants");
+    foreach(int invalid in new int[] {-1,2,Int32.MaxValue}) {
+     Marshal.WriteInt32(weapon,Layout.WeaponMode,invalid);
+     reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);},
+      "Out-of-range firing mode "+invalid+" is rejected before indexing VData floats");
+    }
+    // Reference values from game assets at SteamTracking/GameTracking-CS2 ac1278dbbff39b7fe5030fba42a010e455c011f6:
+    // game/csgo/pak01_dir/scripts/weapons.vdata, weapon_m4a1_silencer. This is allocated test memory, not live CS2.
+    Marshal.WriteInt32(weapon,Layout.WeaponMode,1);Marshal.WriteInt32(vdata,Layout.VDataRecoilSeed,38965);
+    WriteFloat(vdata,Layout.VDataCycle,0.1F);WriteFloat(vdata,Layout.VDataCycle+4,0.1F);
+    WriteFloat(vdata,Layout.VDataRecoilAngle,0);WriteFloat(vdata,Layout.VDataRecoilAngle+4,0);
+    WriteFloat(vdata,Layout.VDataRecoilAngleVariance,65);WriteFloat(vdata,Layout.VDataRecoilAngleVariance+4,65);
+    WriteFloat(vdata,Layout.VDataRecoilMagnitude,25);WriteFloat(vdata,Layout.VDataRecoilMagnitude+4,21);
+    WriteFloat(vdata,Layout.VDataRecoilMagnitudeVariance,3);WriteFloat(vdata,Layout.VDataRecoilMagnitudeVariance+4,0);
+    WeaponParameters silencedRead=WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);
+    WeaponSnapshot silencedSnapshot=new WeaponSnapshot {Weapon="M4A1_S",Sensitivity=1.25F,Build=Layout.TargetBuild,
+     SchemaCommit=Layout.SourceCommit,NativeParametersRead=false,Native=silencedRead};
+    WeaponDataReader.Validate(silencedSnapshot);
+    check(silencedRead.Mode==1&&silencedRead.FullAuto&&silencedRead.BulletsPerShot==1&&silencedRead.RecoilMagnitude==21&&
+     silencedRead.MagnitudeVariance==0&&silencedRead.RecoilSeed==38965,
+     "M4A1-S mode 1 with pinned game-asset values passes the full validation that blocked V0.3.5");
+    MacroExportResult silencedAmc=MainForm.ExportSnapshot(silencedSnapshot,Path.Combine(output,"M4A1_S_MODE1_AMC_TEST.amc"),
+     MacroFormat.Amc,out savedParameters);
+    AmcInput silencedMaster=AmcInput.Load(silencedAmc.OutputPath);
+    check(WeaponSnapshotIO.TryLoad(savedParameters,out m4Roundtrip)&&m4Roundtrip.Native.Mode==1&&
+     m4Roundtrip.Native.RecoilMagnitude==21&&silencedAmc.Amc.Shots==20&&silencedMaster.ReleaseTime==1999,
+     "M4A1-S mode 1 completes AMC extraction and JSON reimport without normalizing the mode or substituting primary recoil");
+    MacroExportResult silencedXml=MainForm.ExportSnapshot(silencedSnapshot,Path.Combine(output,"M4A1_S_MODE1_XML_TEST.amc"),
+     MacroFormat.XmlRazer,out savedParameters);
+    check(WeaponSnapshotIO.TryLoad(savedParameters,out m4Roundtrip)&&m4Roundtrip.Native.Mode==1&&
+     silencedXml.Xml.MoveCommands==silencedAmc.Amc.MoveCommands&&silencedXml.Xml.TotalX==silencedAmc.Amc.TotalX&&
+     silencedXml.Xml.TotalY==silencedAmc.Amc.TotalY&&silencedXml.Xml.ReleaseTimeMs==silencedMaster.ReleaseTime&&
+     silencedXml.Xml.MoveRCommandCostMs==1&&!silencedXml.Xml.CoordinatesScaled,
+     "M4A1-S mode 1 completes XML-only extraction with the same movement totals, release time and existing MoveR calibration");
+    silencedRead.FullAuto=false;
+    reject(delegate{WeaponDataReader.Validate(silencedSnapshot);},"M4A1-S mode 1 cannot bypass a false full-auto flag");
+    silencedRead.FullAuto=true;silencedRead.BulletsPerShot=2;
+    reject(delegate{WeaponDataReader.Validate(silencedSnapshot);},"M4A1-S mode 1 cannot bypass an unsupported bullet count");
+    InvalidOperationException parameterFailure=null;
+    try{WeaponDataReader.Validate(silencedSnapshot);}catch(InvalidOperationException ex){parameterFailure=ex;}
+    check(parameterFailure!=null&&parameterFailure.Message.Contains("proiettili per colpo=2"),
+     "Validation identifies the exact failing parameter instead of the old combined full-auto/mode error");
+    Diagnostics.ReportDirectory=output;Diagnostics.Record(parameterFailure,"M4A1-S TEST MEMORY ONLY",memory.PointerTrace);
+    string parameterDiagnostic=File.ReadAllText(Diagnostics.LastPath);
+    check(parameterDiagnostic.Contains("PARAMETRI ARMA LETTI")&&parameterDiagnostic.Contains("ID arma: 60")&&
+     parameterDiagnostic.Contains("Full-auto VData: true")&&parameterDiagnostic.Contains("Proiettili per colpo: 2")&&
+     parameterDiagnostic.Contains("Modalita' m_weaponMode: 1")&&parameterDiagnostic.Contains("Magnitudine recoil: 21"),
+     "Diagnostic preserves the actual ID, full-auto flag, bullet count, firing mode and selected recoil values");
+    Diagnostics.Record(parameterFailure);
+    check(File.ReadAllText(Diagnostics.LastPath)==parameterDiagnostic,
+     "Main UI catch preserves the detailed weapon-parameter diagnostic");
+    silencedRead.BulletsPerShot=1;silencedRead.Mode=2;
+    reject(delegate{WeaponDataReader.Validate(silencedSnapshot);},"Imported M4A1-S mode 2 remains unsupported");
+    silencedRead.Mode=1;silencedRead.ItemDefinitionIndex=16;silencedSnapshot.Weapon="M4A4";
+    reject(delegate{WeaponDataReader.Validate(silencedSnapshot);},"M4A4 cannot inherit the M4A1-S mode 1 exception");
+    silencedRead.ItemDefinitionIndex=60;silencedSnapshot.Weapon="M4A1_S";silencedRead.DesignerName="weapon_m4a1";
+    reject(delegate{WeaponDataReader.Validate(silencedSnapshot);},"Mode 1 requires M4A1-S silenced VData even for imported snapshots");
+    Marshal.WriteInt32(weapon,Layout.WeaponMode,0);
     reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",16);},
      "M4A4 ID 16 cannot accept M4A1-S VData through the entity-name alias");
     reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1_silencer",16);},

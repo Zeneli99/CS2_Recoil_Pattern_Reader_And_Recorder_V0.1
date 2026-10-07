@@ -1,6 +1,10 @@
-# RecoilLabs / CS2 Recoil Reader & Recorder V0.3.5 — riconoscimento M4A1-S
+# RecoilLabs / CS2 Recoil Reader & Recorder V0.3.6 — modalita' M4A1-S
 
-La V0.3.5 corregge il blocco del report utente: entita' `weapon_m4a1`, VData `weapon_m4a1_silencer`. La coppia viene accettata esclusivamente con **item definition 60 (M4A1-S)**; per questa variante i VData devono essere quelli silenziati. ID M4A4 o nomi di altre armi continuano a produrre un errore, che ora include l'ID dell'arma. Si leggono caricatore, ciclo e recoil dalla VData effettiva: nessuna sostituzione con parametri M4A4.
+La V0.3.6 gestisce le **modalita' 0 e 1 della M4A1-S**: la V0.3.5 rifiutava qualsiasi modalita' 1 con un messaggio generico su full-auto/zoom/burst. La modalita' 1 viene ammessa esclusivamente con **item definition 60 e VData `weapon_m4a1_silencer`**. La coppia entita' `weapon_m4a1` / VData `weapon_m4a1_silencer`, riconosciuta nella V0.3.5, rimane vincolata all'ID 60. Il valore Mode letto viene conservato: non viene forzato a 0.
+
+Ciclo, angolo, varianza angolo, magnitudine e varianza magnitudine sono campi `CFiringModeFloat` con due float32: ora vengono letti all'indice della modalita' corrente, anziche' sempre all'indice 0. Il codice legge i parametri in memoria; i dati di riferimento non diventano una tabella sostitutiva. Full-auto, singolo proiettile, zoom/burst, plausibilita' e doppia lettura stabile restano verificati. Altre armi in modalita' 1 e indici fuori 0/1 vengono rifiutati.
+
+Il report ricevuto non conteneva i singoli valori, quindi non dimostra da solo quale condizione avesse fallito. La nuova diagnostica indica separatamente ID non supportato, FullAuto=false, numero di proiettili o modalita' incompatibile e conserva tutti i parametri letti nella sezione **PARAMETRI ARMA LETTI**. La lettura live della nuova build resta da provare sul PC dell'utente.
 
 Restano la scelta esplicita **Formato: AMC / XML Razer** della V0.3.4, la compatibilita' CS2 14189, il modello e la generazione AMC invariati. La calibrazione XML rimane quella M249 verificata in gioco dall'utente sul Naga V3 Pro: stessi X/Y e tempi Delay +1 ms per ciascun MoveR. Il fix riguarda il riconoscimento prima dell'esportazione, quindi si applica a entrambi i formati.
 
@@ -26,15 +30,15 @@ La traiettoria, i punti dei colpi, la sensibilità, lo smoothing moderato e il r
 
 I report AMC esistenti mantengono `CommandTimingMeasured=false`; la calibrazione Razer e la verifica M249 fornite dall'utente vengono documentate nel report XML separato. Il modello senza sparare rimane sperimentale: legge VData reali ma ricostruisce impulsi e angoli. La verifica M249 della conversione tra dispositivi non prova la correttezza di tutte le nuove traiettorie generate. Il codice della generazione e i metadati AMC preesistenti non sono stati modificati.
 
-I controlli includono uno stream AMC golden indipendente, 300 comandi senza deriva del clock, delta divisi, conversione sensibilità, reimportazione e preservazione dei punti simulati/registrati. EXE e sorgenti completi sono pubblicati in `Downloads/V0.3.5` dopo la compilazione e i controlli Windows.
+I controlli includono uno stream AMC golden indipendente, 300 comandi senza deriva del clock, delta divisi, conversione sensibilità, reimportazione e preservazione dei punti simulati/registrati. EXE e sorgenti completi sono pubblicati in `Downloads/V0.3.6` dopo la compilazione e i controlli Windows.
 
 La schermata principale non avvia piu' una registrazione: **ESTRAI / F8** legge i parametri VData dell'arma attiva e crea il formato selezionato senza sparare. Il recorder precedente rimane separato in **RECORDER / TEST**, solo per confronto e diagnostica.
 
-## Prova rapida V0.3.5
+## Prova rapida V0.3.6
 
-1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3.5_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.5.exe`.
-2. Avvia CS2 con `-insecure`, in una mappa offline ospitata nello stesso processo. Per la prima prova usa AK47.
-3. Ricarica completamente, togli zoom/burst, lascia il sinistro rilasciato e aspetta il reset del recoil.
+1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3.6_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.6.exe`.
+2. Avvia CS2 con `-insecure`, in una mappa offline ospitata nello stesso processo. Per verificare questo fix usa M4A1-S.
+3. Ricarica completamente, togli zoom/burst, lascia il sinistro rilasciato e aspetta il reset del recoil e la fine dell'eventuale animazione del silenziatore.
 4. Scegli **Formato: AMC** oppure **XML Razer**, poi premi **F8 senza sparare**. Il formato selezionato, `.recoil.json` e `.report.json` si trovano in `Estrazioni/AMC` oppure `Estrazioni/XML`.
 5. Importa l'AMC in Bloody nella modalita' finche' tieni premuto. La macro e' sperimentale: questo passaggio e' una prova reale, non una verifica gia' eseguita.
 6. Se l'estrazione fallisce, premi REPORT e conserva `Diagnostica_CS2.txt`. Se il movimento non corrisponde, conserva i due JSON insieme all'AMC: contengono i valori usati, non occorre ricreare lo spray per rigenerare il file.
@@ -49,15 +53,15 @@ Sono letti arma/ID, sensibilita' base, capacita' caricatore, full-auto, modalita
 
 L'output conserva i punti **simulati** dei colpi e arrotonda la posizione cumulativa per evitare deriva. I MoveR sono interpolati in passaggi di circa 10 ms, non a 1 ms. La macro include LeftDown, LeftUp finale e al KeyUp, quindi 30000 ms di anti-repeat. La pausa non impedisce una nuova pressione. Il rilascio e' stimato dal ciclo VData e dal caricatore, non registrato. Questi accorgimenti non provano che i colpi siano centrati.
 
-La modalita' senza sparare supporta solo full-auto, modalita' primaria senza zoom/burst, caricatore pieno e recoil azzerato. Per altri casi si ferma. Restano i controlli build 14189, `-insecure`, IsValveDS e presenza del modulo server locale; quest'ultimo non dimostra da solo che nessun client remoto sia connesso: usa una mappa offline. Il processo e' esterno e in sola lettura; nessuna DLL, hook, scrittura nella memoria del gioco o simulazione di input. Bloody esegue l'AMC, non questo programma.
+La modalita' senza sparare supporta solo full-auto, un proiettile per colpo, modalita' 0 oppure M4A1-S in modalita' 1, senza zoom/burst, caricatore pieno e recoil azzerato. Per altri casi si ferma. Restano i controlli build 14189, `-insecure`, IsValveDS e presenza del modulo server locale; quest'ultimo non dimostra da solo che nessun client remoto sia connesso: usa una mappa offline. Il processo e' esterno e in sola lettura; nessuna DLL, hook, scrittura nella memoria del gioco o simulazione di input. Bloody esegue l'AMC, non questo programma.
 
-## Verifiche e distribuzione V0.3.5
+## Verifiche e distribuzione V0.3.6
 
-`build.ps1` compila l'EXE x64 con .NET Framework su Windows. GitHub Actions esegue i controlli esistenti, il golden XML e i test del percorso realmente usato da F8: XML-only, AMC-only, JSON nel converter, AMC originale nel converter e registrazione. La nuova regressione riproduce i due nomi del report in memoria di test, verifica i parametri della variante e l'estrazione XML con reimportazione JSON, e rifiuta ID o nomi incompatibili. Verifica anche cleanup del master temporaneo, errori, calibrazione, scelta e pulsante UI. **CS2, Bloody e Synapse non vengono avviati in CI.** La lettura live e l'esecuzione della nuova build rimangono da provare sul PC dell'utente.
+`build.ps1` compila l'EXE x64 con .NET Framework su Windows. GitHub Actions esegue i controlli esistenti, il golden XML e i test del percorso realmente usato da F8: XML-only, AMC-only, JSON nel converter, AMC originale nel converter e registrazione. Le regressioni M4A1-S riproducono l'alias e le due modalita' in memoria di test. Valori sintetici distinti verificano tutti e cinque gli indici; i parametri di riferimento del file di gioco verificano la validazione completa e l'estrazione AMC/XML con Mode=1 e reimportazione JSON. ID, nome, FullAuto=false, numero di proiettili e indici incompatibili restano rifiutati. Si verifica anche la diagnostica con i valori effettivi. Verifica cleanup del master temporaneo, errori, calibrazione, scelta e pulsante UI. **CS2, Bloody e Synapse non vengono avviati in CI.** La lettura live e l'esecuzione della nuova build rimangono da provare sul PC dell'utente.
 
-Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. Gli esempi sono separati nelle cartelle `AMC` e `XML`. `AMC/Esempio_NoFire_SINTETICO` contiene parametri AK costruiti dal test, NON estratti da una sessione live. `XML/M249_GOLDEN_EXPORT.xml` e' il risultato del test golden ricostruito, non un'estrazione live. I download della V0.3.5 vengono pubblicati in `Downloads/V0.3.5` solo dopo i controlli.
+Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. Gli esempi sono separati nelle cartelle `AMC` e `XML`. `AMC/Esempio_NoFire_SINTETICO` contiene parametri AK costruiti dal test, NON estratti da una sessione live. `XML/M249_GOLDEN_EXPORT.xml` e' il risultato del test golden ricostruito, non un'estrazione live. I download della V0.3.6 vengono pubblicati in `Downloads/V0.3.6` solo dopo i controlli.
 
-Fonti tecniche: [schema della build fissata](https://github.com/a2x/cs2-dumper/tree/4116de000e085d62bbd42334c67b35bda37bda4f/output), [implementazione legacy della tabella](https://github.com/SwagSoftware/Kisak-Strike/blob/master/game/shared/cstrike15/cs_weapon_parse.cpp) e [stream legacy](https://github.com/SwagSoftware/Kisak-Strike/blob/master/vstdlib/random.cpp). Le fonti legacy non sono una prova dell'implementazione attuale di CS2.
+Fonti tecniche: [schema della build fissata](https://github.com/a2x/cs2-dumper/tree/4116de000e085d62bbd42334c67b35bda37bda4f/output), [struttura CFiringModeFloat con due valori](https://github.com/roflmuffin/CounterStrikeSharp/blob/f32e74515b7a10beb06e1e35406ade8a80ceb6d2/managed/CounterStrikeSharp.API/Generated/Schema/Classes/CFiringModeFloat.g.cs), [parametri M4A1-S nei file di gioco](https://github.com/SteamTracking/GameTracking-CS2/blob/ac1278dbbff39b7fe5030fba42a010e455c011f6/game/csgo/pak01_dir/scripts/weapons.vdata), [implementazione legacy della tabella](https://github.com/SwagSoftware/Kisak-Strike/blob/master/game/shared/cstrike15/cs_weapon_parse.cpp) e [stream legacy](https://github.com/SwagSoftware/Kisak-Strike/blob/master/vstdlib/random.cpp). Le fonti legacy non sono una prova dell'implementazione attuale di CS2.
 
 ---
 
@@ -67,7 +71,7 @@ Il report del 7 ottobre rilevava la build 14189 e il blocco previsto della V0.3.
 
 Aggiornati i cinque indirizzi globali usati da client.dll: sensibilita', pawn, controller, angoli e regole. I campi schema usati da arma, VData e recoil risultano invariati. Restano le verifiche di build, sessione, puntatori e dati plausibili; il puntatore VData non-schema continua a richiedere la validazione live esistente.
 
-`AmcConverter.cs`, `AmcInput.cs` e `RecoilDynamics.cs` restano identici alla V0.3.1. In `NoFireGenerator.cs` cambia soltanto il controllo del nome dentro `WeaponDataReader.ReadParameters`; RNG, modello, ricostruzione e generazione AMC sono identici. Il nuovo helper `WeaponVDataIdentity` vincola l'alias M4A1-S all'ID 60. Il campo Version degli snapshot resta 0.3.1 come versione del generatore invariato, mentre interfaccia e assembly sono V0.3.5. Il layout resta quello della V0.3.2 e il selettore/export XML quello della V0.3.4. La lettura live della M4A1-S richiede una nuova prova sul PC dell'utente.
+`AmcConverter.cs`, `AmcInput.cs` e `RecoilDynamics.cs` restano identici alla V0.3.1. In `NoFireGenerator.cs` cambiano soltanto la lettura e validazione in `WeaponDataReader`: alias M4A1-S all'ID 60, selezione dei cinque campi per modalita' e diagnostica precisa. RNG, modello, ricostruzione, generazione AMC e salvataggio JSON restano identici. Il campo Version degli snapshot resta 0.3.1 come versione del generatore invariato, mentre interfaccia e assembly sono V0.3.6. Il layout resta quello della V0.3.2 e il selettore/export XML quello della V0.3.4. La lettura live della M4A1-S richiede una nuova prova sul PC dell'utente.
 
 I test controllano ogni costante schema/globale del layout contro un manifest fissato al dump 14189. Le costanti non-schema vengono conservate con i controlli runtime esistenti. Gli input diagnostici storici 14188 restano tali: non vengono rinominati come registrazioni 14189.
 

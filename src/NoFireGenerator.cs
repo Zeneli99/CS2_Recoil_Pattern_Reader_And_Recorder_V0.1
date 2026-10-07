@@ -34,6 +34,27 @@ namespace RecoilProbe {
  }
  internal static class WeaponDataReader {
   private static bool Finite(double value) { return !Double.IsNaN(value) && !Double.IsInfinity(value); }
+  private static bool SupportedMode(WeaponParameters p) {
+   // Secondary_Mode is the silenced firing variant on M4A1-S, not zoom/burst.
+   return p.Mode==0||(p.Mode==1&&p.ItemDefinitionIndex==60&&p.DesignerName=="weapon_m4a1_silencer");
+  }
+  private static InvalidOperationException ParameterError(string reason,WeaponParameters p) {
+   InvalidOperationException error=new InvalidOperationException(reason);
+   StringBuilder values=new StringBuilder();
+   values.AppendLine("Nome VData: "+p.DesignerName);
+   values.AppendLine("ID arma: "+p.ItemDefinitionIndex.ToString(CultureInfo.InvariantCulture));
+   values.AppendLine("Full-auto VData: "+(p.FullAuto?"true":"false"));
+   values.AppendLine("Proiettili per colpo: "+p.BulletsPerShot.ToString(CultureInfo.InvariantCulture));
+   values.AppendLine("Modalita' m_weaponMode: "+p.Mode.ToString(CultureInfo.InvariantCulture));
+   values.AppendLine("Caricatore VData: "+p.MaxClip.ToString(CultureInfo.InvariantCulture));
+   values.AppendLine("Ciclo selezionato (s): "+p.CycleSeconds.ToString("R",CultureInfo.InvariantCulture));
+   values.AppendLine("Seed recoil: "+p.RecoilSeed.ToString(CultureInfo.InvariantCulture));
+   values.AppendLine("Angolo recoil: "+p.RecoilAngle.ToString("R",CultureInfo.InvariantCulture));
+   values.AppendLine("Varianza angolo: "+p.AngleVariance.ToString("R",CultureInfo.InvariantCulture));
+   values.AppendLine("Magnitudine recoil: "+p.RecoilMagnitude.ToString("R",CultureInfo.InvariantCulture));
+   values.AppendLine("Varianza magnitudine: "+p.MagnitudeVariance.ToString("R",CultureInfo.InvariantCulture));
+   error.Data["WeaponParameters"]=values.ToString();return error;
+  }
   internal static void Validate(WeaponSnapshot data) {
    if(data==null||data.Format!="CS2_NO_FIRE_V1"||data.Native==null||data.Model==null)
     throw new InvalidOperationException("Snapshot estrazione assente o formato non supportato.");
@@ -44,15 +65,22 @@ namespace RecoilProbe {
    if(data.Weapon!=weapon||String.IsNullOrEmpty(p.DesignerName)||
     !p.DesignerName.StartsWith("weapon_",StringComparison.Ordinal)||p.DesignerName.Length>80)
     throw new InvalidOperationException("Identita' arma incoerente nello snapshot.");
-   if(!WeaponCatalog.IsFullAuto(p.ItemDefinitionIndex)||!p.FullAuto||p.BulletsPerShot!=1||p.Mode!=0)
-    throw new InvalidOperationException("Prova senza sparare: solo armi full-auto, modalita' primaria, senza zoom o burst.");
+   if(!WeaponCatalog.IsFullAuto(p.ItemDefinitionIndex))
+    throw ParameterError("Prova senza sparare: ID arma "+p.ItemDefinitionIndex+" non supportato come full-auto.",p);
+   if(!p.FullAuto)
+    throw ParameterError("Prova senza sparare: FullAuto=false nei VData dell'arma.",p);
+   if(p.BulletsPerShot!=1)
+    throw ParameterError("Prova senza sparare: proiettili per colpo="+p.BulletsPerShot+"; richiesto 1.",p);
+   if(!SupportedMode(p))
+    throw ParameterError("Prova senza sparare: m_weaponMode="+p.Mode+" non supportato per ID arma "+
+     p.ItemDefinitionIndex+". Modalita' 1 ammessa solo per M4A1-S (ID 60, VData silenziata).",p);
    if(p.MaxClip<2||p.MaxClip>200||!Finite(p.CycleSeconds)||p.CycleSeconds<0.02||p.CycleSeconds>0.5||
     p.MaxClip*(double)p.CycleSeconds>20||p.RecoilSeed<0)
-    throw new InvalidOperationException("Capacita', ciclo o seed dell'arma non plausibili.");
+    throw ParameterError("Capacita', ciclo o seed dell'arma non plausibili.",p);
    if(!Finite(p.RecoilAngle)||Math.Abs(p.RecoilAngle)>180||!Finite(p.AngleVariance)||p.AngleVariance<0||p.AngleVariance>180||
     !Finite(p.RecoilMagnitude)||p.RecoilMagnitude<=0||p.RecoilMagnitude>200||!Finite(p.MagnitudeVariance)||
     p.MagnitudeVariance<0||p.MagnitudeVariance>p.RecoilMagnitude)
-    throw new InvalidOperationException("Parametri recoil VData fuori scala.");
+    throw ParameterError("Parametri recoil VData fuori scala.",p);
    if(!IdentityReader.ValidSensitivity(data.Sensitivity)||m.Algorithm!="SOURCE_LEGACY_EXPERIMENTAL_V1"||m.TableLength!=64||
     m.SuppressionShots<0||m.SuppressionShots>64||!Finite(m.SuppressionFactor)||m.SuppressionFactor<0||m.SuppressionFactor>1||
     !Finite(m.Variance)||m.Variance<0||m.Variance>1||!Finite(m.MousePitch)||m.MousePitch<0.001||m.MousePitch>1||
@@ -71,13 +99,19 @@ namespace RecoilProbe {
    if(!WeaponVDataIdentity.Matches(definition,expectedName,actual))
     throw new InvalidOperationException("VData non validata: nome '"+actual+"' incompatibile con entita' '"+expectedName+"' e ID arma "+definition+".");
    byte full=memory.Byte(vdata+Layout.VDataFullAuto);
-   if(full>1)throw new InvalidOperationException("Flag full-auto VData non valido.");
+   if(full>1)throw new InvalidOperationException("Flag full-auto VData non valido: "+full+" (ID arma "+definition+", VData "+actual+").");
+   int mode=memory.Int(weapon+Layout.WeaponMode);
+   if(mode<0||mode>1)throw new InvalidOperationException("Modalita' m_weaponMode non valida: "+mode+
+    " (ID arma "+definition+", VData "+actual+"); ammessi indici 0 e 1.");
+   // CFiringModeFloat contains two float32 values. Select the live mode for every mode-dependent field.
+   int modeOffset=mode*sizeof(float);
    return new WeaponParameters {DesignerName=actual,ItemDefinitionIndex=definition,
     MaxClip=memory.Int(vdata+Layout.VDataMaxClip),BulletsPerShot=memory.Int(vdata+Layout.VDataBullets),
-    FullAuto=full==1,Mode=memory.Int(weapon+Layout.WeaponMode),RecoilSeed=memory.Int(vdata+Layout.VDataRecoilSeed),
-    CycleSeconds=memory.Float(vdata+Layout.VDataCycle),RecoilAngle=memory.Float(vdata+Layout.VDataRecoilAngle),
-    AngleVariance=memory.Float(vdata+Layout.VDataRecoilAngleVariance),RecoilMagnitude=memory.Float(vdata+Layout.VDataRecoilMagnitude),
-    MagnitudeVariance=memory.Float(vdata+Layout.VDataRecoilMagnitudeVariance)};
+    FullAuto=full==1,Mode=mode,RecoilSeed=memory.Int(vdata+Layout.VDataRecoilSeed),
+    CycleSeconds=memory.Float(vdata+Layout.VDataCycle+modeOffset),RecoilAngle=memory.Float(vdata+Layout.VDataRecoilAngle+modeOffset),
+    AngleVariance=memory.Float(vdata+Layout.VDataRecoilAngleVariance+modeOffset),
+    RecoilMagnitude=memory.Float(vdata+Layout.VDataRecoilMagnitude+modeOffset),
+    MagnitudeVariance=memory.Float(vdata+Layout.VDataRecoilMagnitudeVariance+modeOffset)};
   }
   private static void Idle(Game game,GameIdentity identity) {
    float index=game.Memory.Float(identity.WeaponAddress+Layout.WeaponRecoilIndexFloat);

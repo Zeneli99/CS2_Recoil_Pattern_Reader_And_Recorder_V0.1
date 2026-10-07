@@ -1,9 +1,13 @@
-RECOILLABS / CS2 RECOIL — V0.3.5 — FIX RICONOSCIMENTO M4A1-S
+RECOILLABS / CS2 RECOIL — V0.3.6 — FIX MODALITA' M4A1-S
 
 FIX M4A1-S
-Il report mostrava entita' weapon_m4a1 e VData weapon_m4a1_silencer.
-Questa coppia ora e' accettata soltanto con ID arma 60 (M4A1-S).
-I parametri vengono letti dalla VData silenziata; ID e nomi incompatibili restano bloccati.
+Restano il riconoscimento dell'alias weapon_m4a1 / weapon_m4a1_silencer e il vincolo ID arma 60.
+La V0.3.5 rifiutava qualsiasi modalita' 1: ora e' ammessa solo per M4A1-S con VData silenziata.
+Ciclo e quattro campi recoil leggono il valore corrispondente alla modalita' 0 oppure 1.
+Mode rimane quello letto in memoria; non viene forzato a zero e non si inventano parametri.
+Full-auto, singolo proiettile, zoom/burst e lettura stabile rimangono controllati.
+Il report ora identifica la condizione esatta e mostra i valori in PARAMETRI ARMA LETTI.
+Il vecchio report non indicava quale condizione avesse fallito: la nuova prova lo chiarira'.
 Il controllo precede l'export e vale sia per AMC sia per XML Razer.
 Generazione AMC, delay e calibrazione XML restano invariati.
 La lettura della M4A1-S in CS2 va riprovata sul PC dell'utente.
@@ -34,7 +38,7 @@ il master temporaneo viene rimosso, senza lasciare AMC nella cartella di output.
 Se l'XML fallisce viene mostrato l'errore XML: premi REPORT per la diagnostica.
 L'XML e' per Synapse 4. Imposta la modalita' di attivazione desiderata in Synapse.
 
-Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.5.exe.
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.6.exe.
 ESTRAI continua a leggere i parametri VData senza sparare, nel formato selezionato.
 Il nuovo exporter usa la convenzione 1 ms per MoveR indicata dal recorder Fusion:
 per una cadenza prevista di 10 ms scrive di solito Delay 9 ms + MoveR.
@@ -44,9 +48,9 @@ I metadati AMC precedenti restano invariati; la calibrazione fornita e' nel repo
 Il modello recoil resta sperimentale; questa build non e' verificata in gioco.
 La macro privata fornita come riferimento non e' inclusa o copiata nell'EXE.
 
-CS2 SENZA SPARARE — V0.3.5 SPERIMENTALE
+CS2 SENZA SPARARE — V0.3.6 SPERIMENTALE
 
-Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.5.exe.
+Apri CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.6.exe.
 CS2 con -insecure, mappa OFFLINE ospitata sul PC; prima prova con AK47.
 Ricarica completamente. Togli zoom/burst, rilascia il sinistro e attendi il reset recoil.
 Premi ESTRAI o F8: NON devi sparare per generare la macro.
@@ -82,7 +86,7 @@ La precisione dei proiettili non e' ancora verificata. Leggi ANALISI_AK47.md.
 
 CS2 RECOIL INTERNO V0.2.5
 
-Apri RECORDER / TEST dall'EXE V0.3.5.
+Apri RECORDER / TEST dall'EXE V0.3.6.
 Arma equipaggiata e sensibilita' vengono lette automaticamente dal gioco.
 
 LETTURA DIRETTA DEL RECOIL

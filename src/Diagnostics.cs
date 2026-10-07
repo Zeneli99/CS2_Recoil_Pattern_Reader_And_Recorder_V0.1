@@ -30,7 +30,7 @@ namespace RecoilProbe {
     if(key==previousKey && (DateTime.UtcNow-previousTime).TotalSeconds<10)return;
     previous=error;previousKey=key;previousTime=DateTime.UtcNow;
     StringBuilder report=new StringBuilder();
-    report.AppendLine("CS2 NO-FIRE V0.3.5 SPERIMENTALE - DIAGNOSTICA");
+    report.AppendLine("CS2 NO-FIRE V0.3.6 SPERIMENTALE - DIAGNOSTICA");
     report.AppendLine("UTC: "+DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture));
     report.AppendLine("Il report viene salvato sul PC; non viene inviato automaticamente.");
     report.AppendLine("Layout: "+Layout.TargetBuild+"; fonte "+Layout.SourceCommit);
@@ -42,6 +42,10 @@ namespace RecoilProbe {
      report.AppendLine("Indirizzo letto: 0x"+memory.Address.ToString("X",CultureInfo.InvariantCulture));
      report.AppendLine("Valore: "+(memory.Value.HasValue?
       "0x"+memory.Value.Value.ToString("X",CultureInfo.InvariantCulture):"lettura incompleta"));
+    }
+    if(error.Data.Contains("WeaponParameters")) {
+     report.AppendLine();report.AppendLine("PARAMETRI ARMA LETTI");
+     report.AppendLine(Convert.ToString(error.Data["WeaponParameters"],CultureInfo.InvariantCulture));
     }
     if(!String.IsNullOrEmpty(pointerTrace)){report.AppendLine();report.AppendLine("PUNTATORI LETTI");report.AppendLine(pointerTrace);}
     report.AppendLine();report.AppendLine("DETTAGLIO");report.AppendLine(error.ToString());
