@@ -9,6 +9,10 @@ namespace RecoilProbe {
    if(definition==60)return vdataName=="weapon_m4a1_silencer"&&
     (entityName=="weapon_m4a1"||entityName=="weapon_m4a1_silencer");
    if(entityName=="weapon_m4a1_silencer"||vdataName=="weapon_m4a1_silencer")return false;
+   // MP5-SD reuses the MP7 entity classname but must read its own variant VData.
+   if(definition==23)return vdataName=="weapon_mp5sd"&&
+    (entityName=="weapon_mp7"||entityName=="weapon_mp5sd");
+   if(entityName=="weapon_mp5sd"||vdataName=="weapon_mp5sd")return false;
    return String.Equals(entityName,vdataName,StringComparison.Ordinal);
   }
  }

@@ -94,7 +94,7 @@ internal static class NoFireChecks {
  }
  private static void NativeReadChecks(string output,Action<bool,string> check,Action<Action,string> reject) {
   IntPtr weapon=Marshal.AllocHGlobal(0x2000),vdata=Marshal.AllocHGlobal(0x900),name=Marshal.StringToHGlobalAnsi("weapon_ak47"),
-   silenced=Marshal.StringToHGlobalAnsi("weapon_m4a1_silencer");
+   silenced=Marshal.StringToHGlobalAnsi("weapon_m4a1_silencer"),mp5Name=Marshal.StringToHGlobalAnsi("weapon_mp5sd");
   try {
    Marshal.Copy(new byte[0x2000],0,weapon,0x2000);Marshal.Copy(new byte[0x900],0,vdata,0x900);
    Marshal.WriteIntPtr(weapon,Layout.WeaponVData,vdata);Marshal.WriteIntPtr(vdata,Layout.VDataName,name);
@@ -128,11 +128,13 @@ internal static class NoFireChecks {
     WriteFloat(vdata,Layout.VDataCycle+4,0.12F);WriteFloat(vdata,Layout.VDataRecoilAngle+4,-10);
     WriteFloat(vdata,Layout.VDataRecoilAngleVariance+4,55);WriteFloat(vdata,Layout.VDataRecoilMagnitude+4,21);
     WriteFloat(vdata,Layout.VDataRecoilMagnitudeVariance+4,2);Marshal.WriteInt32(weapon,Layout.WeaponMode,1);
+    Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,1);
     WeaponParameters alternate=WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);
     check(alternate.Mode==1&&alternate.CycleSeconds==0.12F&&alternate.RecoilAngle==-10&&alternate.AngleVariance==55&&
      alternate.RecoilMagnitude==21&&alternate.MagnitudeVariance==2&&alternate.MaxClip==20&&alternate.RecoilSeed==555,
      "M4A1-S mode 1 selects the second float of every cycle/recoil field and preserves the raw mode");
     Marshal.WriteInt32(weapon,Layout.WeaponMode,0);
+    Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,0);
     WeaponParameters primary=WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);
     check(primary.Mode==0&&primary.CycleSeconds==0.1F&&primary.RecoilAngle==0&&primary.AngleVariance==70&&
      primary.RecoilMagnitude==30&&primary.MagnitudeVariance==0,
@@ -145,6 +147,7 @@ internal static class NoFireChecks {
     // Reference values from game assets at SteamTracking/GameTracking-CS2 ac1278dbbff39b7fe5030fba42a010e455c011f6:
     // game/csgo/pak01_dir/scripts/weapons.vdata, weapon_m4a1_silencer. This is allocated test memory, not live CS2.
     Marshal.WriteInt32(weapon,Layout.WeaponMode,1);Marshal.WriteInt32(vdata,Layout.VDataRecoilSeed,38965);
+    Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,1);
     WriteFloat(vdata,Layout.VDataCycle,0.1F);WriteFloat(vdata,Layout.VDataCycle+4,0.1F);
     WriteFloat(vdata,Layout.VDataRecoilAngle,0);WriteFloat(vdata,Layout.VDataRecoilAngle+4,0);
     WriteFloat(vdata,Layout.VDataRecoilAngleVariance,65);WriteFloat(vdata,Layout.VDataRecoilAngleVariance+4,65);
@@ -170,6 +173,59 @@ internal static class NoFireChecks {
      silencedXml.Xml.TotalY==silencedAmc.Amc.TotalY&&silencedXml.Xml.ReleaseTimeMs==silencedMaster.ReleaseTime&&
      silencedXml.Xml.MoveRCommandCostMs==1&&!silencedXml.Xml.CoordinatesScaled,
      "M4A1-S mode 1 completes XML-only extraction with the same movement totals, release time and existing MoveR calibration");
+    Marshal.WriteInt32(weapon,Layout.WeaponMode,0);Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,0);
+    WeaponParameters unsilencedRead=WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);
+    WeaponSnapshot unsilencedSnapshot=new WeaponSnapshot {Weapon="M4A1_S",Sensitivity=1.25F,Build=Layout.TargetBuild,
+     SchemaCommit=Layout.SourceCommit,NativeParametersRead=false,Native=unsilencedRead};
+    WeaponDataReader.Validate(unsilencedSnapshot);
+    check(unsilencedRead.Mode==0&&unsilencedRead.SilencerOn==false&&unsilencedRead.RecoilMagnitude==25&&
+     unsilencedRead.MagnitudeVariance==3&&silencedRead.SilencerOn==true&&silencedRead.RecoilMagnitude==21&&
+     silencedRead.MagnitudeVariance==0,
+     "Unsilenced M4A1-S reads primary recoil 25/3 while the silenced variant keeps secondary recoil 21/0");
+    List<ReconstructedShot> unsilencedShots=NoFireGenerator.Reconstruct(unsilencedSnapshot);
+    List<ReconstructedShot> silencedShots=NoFireGenerator.Reconstruct(silencedSnapshot);
+    check(unsilencedShots[0].ImpulseMagnitude>=16.5&&unsilencedShots[0].ImpulseMagnitude<=21&&
+     Math.Abs(silencedShots[0].ImpulseMagnitude-15.75)<1e-6&&
+     (unsilencedShots[19].Pitch!=silencedShots[19].Pitch||unsilencedShots[19].Yaw!=silencedShots[19].Yaw),
+     "M4A1-S firing variants reconstruct distinct trajectories from their own native magnitudes and variances");
+    string offName=NoFireGenerator.SuggestedFileName(unsilencedSnapshot,1.25);
+    string onName=NoFireGenerator.SuggestedFileName(silencedSnapshot,1.25);
+    check(offName.StartsWith("M4A1_S_SENZA_SILENZIATORE_")&&onName.StartsWith("M4A1_S_CON_SILENZIATORE_")&&
+     WeaponVariant.DisplayName(unsilencedSnapshot)=="M4A1-S senza silenziatore"&&
+     WeaponVariant.DisplayName(silencedSnapshot)=="M4A1-S con silenziatore",
+     "File suggestions and snapshot UI distinguish both M4A1-S profiles without changing the canonical weapon ID");
+    string offSelection=Path.Combine(output,offName);
+    MacroExportResult offAmc=MainForm.ExportSnapshot(unsilencedSnapshot,offSelection,MacroFormat.Amc,out savedParameters);
+    AmcInput offMaster=AmcInput.Load(offAmc.OutputPath);
+    check(WeaponSnapshotIO.TryLoad(savedParameters,out m4Roundtrip)&&m4Roundtrip.Weapon=="M4A1_S"&&
+     m4Roundtrip.Native.Mode==0&&m4Roundtrip.Native.SilencerOn==false&&m4Roundtrip.Native.RecoilMagnitude==25&&
+     offMaster.WeaponName=="M4A1_S_SENZA_SILENZIATORE"&&offMaster.ReleaseTime==1999,
+     "Unsilenced M4A1-S completes AMC extraction and JSON reimport with its own profile header and primary recoil");
+    MacroExportResult offXml=MainForm.ExportSnapshot(unsilencedSnapshot,offSelection,MacroFormat.XmlRazer,out savedParameters);
+    check(WeaponSnapshotIO.TryLoad(savedParameters,out m4Roundtrip)&&m4Roundtrip.Native.SilencerOn==false&&
+     Path.GetFileName(offXml.OutputPath).StartsWith("M4A1_S_SENZA_SILENZIATORE_")&&
+     offXml.Xml.MoveCommands==offAmc.Amc.MoveCommands&&offXml.Xml.TotalX==offAmc.Amc.TotalX&&
+     offXml.Xml.TotalY==offAmc.Amc.TotalY&&offXml.Xml.ReleaseTimeMs==offMaster.ReleaseTime&&
+     offXml.Xml.MoveRCommandCostMs==1&&!offXml.Xml.CoordinatesScaled,
+     "Unsilenced M4A1-S completes XML extraction with its own file name and unchanged AMC movement/timing calibration");
+    check(silencedMaster.WeaponName=="M4A1_S_CON_SILENZIATORE"&&
+     (offAmc.Amc.TotalX!=silencedAmc.Amc.TotalX||offAmc.Amc.TotalY!=silencedAmc.Amc.TotalY),
+     "Both M4A1-S AMC descriptions identify their firing variant and retain different generated movement totals");
+    unsilencedRead.SilencerOn=true;
+    reject(delegate{WeaponDataReader.Validate(unsilencedSnapshot);},"Conflicting M4A1-S silencer flag and mode are rejected during transition");
+    unsilencedRead.SilencerOn=null;
+    string legacy=Path.Combine(output,"M4A1_S_MODE0_LEGACY.recoil.json");
+    Dictionary<string,object> legacyObject=RecordingIO.Serializer().Deserialize<Dictionary<string,object>>(
+     RecordingIO.Serializer().Serialize(unsilencedSnapshot));
+    ((Dictionary<string,object>)legacyObject["Native"]).Remove("SilencerOn");
+    File.WriteAllText(legacy,RecordingIO.Serializer().Serialize(legacyObject));
+    check(WeaponSnapshotIO.TryLoad(legacy,out m4Roundtrip)&&m4Roundtrip.Native.Mode==0&&
+     !m4Roundtrip.Native.SilencerOn.HasValue&&WeaponVariant.ExportName(m4Roundtrip)=="M4A1_S_SENZA_SILENZIATORE",
+     "Previous M4A1-S JSON snapshots without a silencer flag remain importable using their recorded firing mode");
+    Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,2);
+    reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_m4a1",60);},
+     "Extraction rejects an invalid silencer boolean rather than assuming mounted or removed");
+    Marshal.WriteInt32(weapon,Layout.WeaponMode,1);Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,1);
     silencedRead.FullAuto=false;
     reject(delegate{WeaponDataReader.Validate(silencedSnapshot);},"M4A1-S mode 1 cannot bypass a false full-auto flag");
     silencedRead.FullAuto=true;silencedRead.BulletsPerShot=2;
@@ -206,6 +262,45 @@ internal static class NoFireChecks {
     check(WeaponVDataIdentity.Matches(16,"weapon_m4a1","weapon_m4a1")&&
      !WeaponVDataIdentity.Matches(60,"weapon_m4a1","weapon_m4a1"),
      "M4A4 identity remains exact while M4A1-S requires its own silenced VData");
+    // Reproduce the MP5-SD report and use pinned game-asset values, not MP7 parameters.
+    Marshal.WriteIntPtr(vdata,Layout.VDataName,mp5Name);Marshal.WriteInt32(weapon,Layout.WeaponMode,0);
+    Marshal.WriteInt32(vdata,Layout.VDataMaxClip,30);Marshal.WriteInt32(vdata,Layout.VDataRecoilSeed,61649);
+    WriteFloat(vdata,Layout.VDataCycle,0.08F);WriteFloat(vdata,Layout.VDataRecoilAngle,0);
+    WriteFloat(vdata,Layout.VDataRecoilAngleVariance,70);WriteFloat(vdata,Layout.VDataRecoilMagnitude,16);
+    WriteFloat(vdata,Layout.VDataRecoilMagnitudeVariance,1);
+    WeaponParameters mp5Read=WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_mp7",23);
+    check(mp5Read.ItemDefinitionIndex==23&&mp5Read.DesignerName=="weapon_mp5sd"&&mp5Read.RecoilSeed==61649&&
+     mp5Read.RecoilMagnitude==16&&mp5Read.MagnitudeVariance==1&&mp5Read.CycleSeconds==0.08F,
+     "Reported MP5-SD entity MP7/VData MP5 mismatch is accepted for ID 23 and reads MP5-specific parameters");
+    check(WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_mp5sd",23).DesignerName=="weapon_mp5sd",
+     "MP5-SD canonical entity and VData names remain valid");
+    WeaponSnapshot mp5Snapshot=new WeaponSnapshot {Weapon="MP5_SD",Sensitivity=1.25F,Build=Layout.TargetBuild,
+     SchemaCommit=Layout.SourceCommit,NativeParametersRead=false,Native=mp5Read};
+    MacroExportResult mp5Amc=MainForm.ExportSnapshot(mp5Snapshot,Path.Combine(output,"MP5_SD_NATIVE_AMC_TEST.amc"),
+     MacroFormat.Amc,out savedParameters);
+    AmcInput mp5Master=AmcInput.Load(mp5Amc.OutputPath);
+    check(WeaponSnapshotIO.TryLoad(savedParameters,out m4Roundtrip)&&m4Roundtrip.Native.ItemDefinitionIndex==23&&
+     m4Roundtrip.Native.DesignerName=="weapon_mp5sd"&&mp5Amc.Amc.Shots==30&&mp5Master.ReleaseTime==2399,
+     "MP5-SD parameters through the reported alias complete AMC extraction and JSON reimport");
+    MacroExportResult mp5Xml=MainForm.ExportSnapshot(mp5Snapshot,Path.Combine(output,"MP5_SD_NATIVE_XML_TEST.amc"),
+     MacroFormat.XmlRazer,out savedParameters);
+    check(WeaponSnapshotIO.TryLoad(savedParameters,out m4Roundtrip)&&m4Roundtrip.Native.RecoilSeed==61649&&
+     mp5Xml.Xml.MoveCommands==mp5Amc.Amc.MoveCommands&&mp5Xml.Xml.TotalX==mp5Amc.Amc.TotalX&&
+     mp5Xml.Xml.TotalY==mp5Amc.Amc.TotalY&&mp5Xml.Xml.ReleaseTimeMs==mp5Master.ReleaseTime&&
+     mp5Xml.Xml.MoveRCommandCostMs==1&&!mp5Xml.Xml.CoordinatesScaled,
+     "MP5-SD parameters complete XML-only extraction with the same AMC movement totals and release timing");
+    reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_mp7",33);},
+     "MP7 ID 33 cannot accept MP5-SD VData through the alias");
+    reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_mp5sd",33);},
+     "Matching MP5-SD names with the wrong MP7 ID remain rejected");
+    reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_ak47",23);},
+     "MP5-SD ID alone cannot authorize an unrelated entity name");
+    mp5Read.DesignerName="weapon_mp7";
+    reject(delegate{WeaponDataReader.Validate(mp5Snapshot);},"Imported MP5-SD snapshots cannot substitute MP7 VData");
+    check(WeaponVDataIdentity.Matches(33,"weapon_mp7","weapon_mp7")&&
+     !WeaponVDataIdentity.Matches(23,"weapon_mp7","weapon_mp7"),
+     "MP7 keeps exact-name validation while MP5-SD requires its own variant VData");
+    Marshal.WriteIntPtr(vdata,Layout.VDataName,name);
     Marshal.WriteByte(vdata,Layout.VDataFullAuto,2);
     reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_ak47",7);},
      "Invalid native boolean cannot masquerade as a full-auto VData");
@@ -213,6 +308,6 @@ internal static class NoFireChecks {
     reject(delegate{WeaponDataReader.ReadParameters(memory,weapon.ToInt64(),"weapon_ak47",7);},
      "Invalid VData pointer is rejected with the field-specific diagnostic");
    }
-  } finally{Marshal.FreeHGlobal(silenced);Marshal.FreeHGlobal(name);Marshal.FreeHGlobal(vdata);Marshal.FreeHGlobal(weapon);}
+  } finally{Marshal.FreeHGlobal(mp5Name);Marshal.FreeHGlobal(silenced);Marshal.FreeHGlobal(name);Marshal.FreeHGlobal(vdata);Marshal.FreeHGlobal(weapon);}
  }
 }

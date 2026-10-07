@@ -11,6 +11,7 @@ namespace RecoilProbe {
   public uint WeaponHandle;
   public float Sensitivity, PawnMouseSensitivity, FovSensitivityAdjust;
   public bool Scoped;
+  public bool? SilencerOn;
   internal long WeaponAddress;
  }
  internal static class WeaponCatalog {
@@ -38,6 +39,12 @@ namespace RecoilProbe {
   internal const int EntryMask = 0x7FFF;
   internal static bool ValidSensitivity(double value) {
    return !Double.IsNaN(value) && !Double.IsInfinity(value) && value >= 0.0001 && value <= 100;
+  }
+  internal static bool? ReadSilencerState(ReadMemory memory,long weapon,int definition) {
+   if(definition!=60)return null;
+   byte value=memory.Byte(weapon+Layout.WeaponSilencerOn);
+   if(value>1)throw new InvalidOperationException("Flag silenziatore M4A1-S non valido: "+value+".");
+   return value==1;
   }
   internal static string ReadName(ReadMemory memory, long address) {
    StringBuilder result = new StringBuilder();
@@ -124,6 +131,7 @@ namespace RecoilProbe {
    result.PawnMouseSensitivity = memory.Float(pawn + Layout.PawnMouseSensitivity);
    result.FovSensitivityAdjust = memory.Float(pawn + Layout.FovSensitivityAdjust);
    result.Scoped = memory.Byte(pawn + Layout.Scoped) != 0;
+   result.SilencerOn = ReadSilencerState(memory,result.WeaponAddress,result.ItemDefinitionIndex);
    result.Ammo = memory.Int(result.WeaponAddress + Layout.WeaponClip);
    if (!ValidSensitivity(result.Sensitivity) || result.Ammo < 0 || result.Ammo > 1000)
     throw new InvalidOperationException("Sensibilita' o munizioni non plausibili. Lettura interrotta.");

@@ -11,6 +11,7 @@ namespace RecoilProbe {
   public string DesignerName;
   public int ItemDefinitionIndex, MaxClip, BulletsPerShot, RecoilSeed, Mode;
   public bool FullAuto;
+  public bool? SilencerOn;
   public float CycleSeconds, RecoilAngle, AngleVariance, RecoilMagnitude, MagnitudeVariance;
  }
  internal sealed class NoFireModel {
@@ -46,6 +47,7 @@ namespace RecoilProbe {
    values.AppendLine("Full-auto VData: "+(p.FullAuto?"true":"false"));
    values.AppendLine("Proiettili per colpo: "+p.BulletsPerShot.ToString(CultureInfo.InvariantCulture));
    values.AppendLine("Modalita' m_weaponMode: "+p.Mode.ToString(CultureInfo.InvariantCulture));
+   values.AppendLine("Silenziatore letto: "+(p.SilencerOn.HasValue?(p.SilencerOn.Value?"montato":"rimosso"):"non disponibile"));
    values.AppendLine("Caricatore VData: "+p.MaxClip.ToString(CultureInfo.InvariantCulture));
    values.AppendLine("Ciclo selezionato (s): "+p.CycleSeconds.ToString("R",CultureInfo.InvariantCulture));
    values.AppendLine("Seed recoil: "+p.RecoilSeed.ToString(CultureInfo.InvariantCulture));
@@ -65,6 +67,9 @@ namespace RecoilProbe {
    if(data.Weapon!=weapon||String.IsNullOrEmpty(p.DesignerName)||
     !p.DesignerName.StartsWith("weapon_",StringComparison.Ordinal)||p.DesignerName.Length>80)
     throw new InvalidOperationException("Identita' arma incoerente nello snapshot.");
+   if((p.ItemDefinitionIndex==60||p.ItemDefinitionIndex==23)&&
+    !WeaponVDataIdentity.Matches(p.ItemDefinitionIndex,p.DesignerName,p.DesignerName))
+    throw ParameterError("Nome VData incompatibile con la variante dell'arma nello snapshot.",p);
    if(!WeaponCatalog.IsFullAuto(p.ItemDefinitionIndex))
     throw ParameterError("Prova senza sparare: ID arma "+p.ItemDefinitionIndex+" non supportato come full-auto.",p);
    if(!p.FullAuto)
@@ -74,6 +79,8 @@ namespace RecoilProbe {
    if(!SupportedMode(p))
     throw ParameterError("Prova senza sparare: m_weaponMode="+p.Mode+" non supportato per ID arma "+
      p.ItemDefinitionIndex+". Modalita' 1 ammessa solo per M4A1-S (ID 60, VData silenziata).",p);
+   if(p.ItemDefinitionIndex==60&&p.SilencerOn.HasValue&&p.SilencerOn.Value!=(p.Mode==1))
+    throw ParameterError("M4A1-S: stato silenziatore e modalita' non concordano. Attendi la fine dell'animazione e ripeti F8.",p);
    if(p.MaxClip<2||p.MaxClip>200||!Finite(p.CycleSeconds)||p.CycleSeconds<0.02||p.CycleSeconds>0.5||
     p.MaxClip*(double)p.CycleSeconds>20||p.RecoilSeed<0)
     throw ParameterError("Capacita', ciclo o seed dell'arma non plausibili.",p);
@@ -107,7 +114,8 @@ namespace RecoilProbe {
    int modeOffset=mode*sizeof(float);
    return new WeaponParameters {DesignerName=actual,ItemDefinitionIndex=definition,
     MaxClip=memory.Int(vdata+Layout.VDataMaxClip),BulletsPerShot=memory.Int(vdata+Layout.VDataBullets),
-    FullAuto=full==1,Mode=mode,RecoilSeed=memory.Int(vdata+Layout.VDataRecoilSeed),
+    FullAuto=full==1,Mode=mode,SilencerOn=IdentityReader.ReadSilencerState(memory,weapon,definition),
+    RecoilSeed=memory.Int(vdata+Layout.VDataRecoilSeed),
     CycleSeconds=memory.Float(vdata+Layout.VDataCycle+modeOffset),RecoilAngle=memory.Float(vdata+Layout.VDataRecoilAngle+modeOffset),
     AngleVariance=memory.Float(vdata+Layout.VDataRecoilAngleVariance+modeOffset),
     RecoilMagnitude=memory.Float(vdata+Layout.VDataRecoilMagnitude+modeOffset),
@@ -218,7 +226,7 @@ namespace RecoilProbe {
   internal static AmcResult Convert(WeaponSnapshot data,string output,double sensitivity) {
    if(!IdentityReader.ValidSensitivity(sensitivity))throw new InvalidOperationException("Sensibilita' destinazione non valida.");
    List<ReconstructedShot> shots=Reconstruct(data);NoFireModel m=data.Model;
-   AmcResult result=new AmcResult {Weapon=data.Weapon,Shots=shots.Count,SourceSensitivity=data.Sensitivity,
+   AmcResult result=new AmcResult {Weapon=WeaponVariant.ExportName(data),Shots=shots.Count,SourceSensitivity=data.Sensitivity,
     TargetSensitivity=sensitivity,SourcePath=data.SourcePath,SourceKind="CS2_VDATA_NO_FIRE_EXPERIMENTAL",
     WeaponAndSensitivityAutomaticallyRead=data.NativeParametersRead,NoFireInput=data,
     RecoilSequenceReconstructed=true,CurrentEngineAlgorithmVerified=false,
@@ -249,7 +257,7 @@ namespace RecoilProbe {
    return AmcConverter.Save(result,commands,output);
   }
   internal static string SuggestedFileName(WeaponSnapshot data,double sensitivity) {
-   return data.Weapon+"_NO_FIRE_TEST_SENS_"+sensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+"_"+
+   return WeaponVariant.ExportName(data)+"_NO_FIRE_TEST_SENS_"+sensitivity.ToString("0.000###",CultureInfo.InvariantCulture)+"_"+
     DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff",CultureInfo.InvariantCulture)+".amc";
   }
  }

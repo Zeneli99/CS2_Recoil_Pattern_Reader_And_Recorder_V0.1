@@ -31,6 +31,6 @@ internal static class LayoutChecks {
   foreach(FieldInfo field in typeof(Layout).GetFields(flags))
    if(field.FieldType==typeof(int)&&field.Name!="TargetBuild")
     covered&=offsets.ContainsKey(field.Name)||candidates.ContainsKey(field.Name);
-  check(covered&&offsets.Count==61&&candidates.Count==2,"Every layout offset has explicit provenance or candidate classification");
+  check(covered&&offsets.Count==62&&candidates.Count==2,"Every layout offset has explicit provenance or candidate classification");
  }
 }

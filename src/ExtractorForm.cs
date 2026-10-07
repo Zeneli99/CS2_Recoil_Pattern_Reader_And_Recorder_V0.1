@@ -15,8 +15,8 @@ namespace RecoilProbe {
   private System.Windows.Forms.Timer monitor;
   private const int HotkeyId=8119;
   internal MainForm() {
-   Ui.Style(this,"CS2 SENZA SPARARE · V0.3.6 SPERIMENTALE");Ui.Title(this,"CS2 SENZA SPARARE");
-   Ui.Label(this,"V0.3.6",470,25,60,24);
+   Ui.Style(this,"CS2 SENZA SPARARE · V0.3.7 SPERIMENTALE");Ui.Title(this,"CS2 SENZA SPARARE");
+   Ui.Label(this,"V0.3.7",470,25,60,24);
    converter=Ui.Button(this,"CONVERTER",20,54,145,29);
    converter.Click+=delegate {using(ConverterForm form=new ConverterForm())form.ShowDialog(this);};
    recorder=Ui.Button(this,"RECORDER / TEST",180,54,165,29);
@@ -56,7 +56,7 @@ namespace RecoilProbe {
     try{using(Game game=new Game(false))info=game.ReadIdentity();}catch(Exception ex){error=ex.Message;}
     Ui.Post(this,delegate {
      detecting=false;if(busy)return;
-     weapon.Text=info==null?"In attesa":info.WeaponName;sensitivity.Text=info==null?"AUTO":Ui.Sens(info.Sensitivity);
+     weapon.Text=info==null?"In attesa":WeaponVariant.DisplayName(info);sensitivity.Text=info==null?"AUTO":Ui.Sens(info.Sensitivity);
      detected.Text=info==null?error:info.Scoped?"Togli lo zoom prima dell'estrazione.":
       "Arma e sensibilita' lette · caricatore "+info.Ammo+" · non sparare";
     });
@@ -77,7 +77,7 @@ namespace RecoilProbe {
     } catch(Exception ex){error=ex.Message;Diagnostics.Record(ex);}
     Ui.Post(this,delegate {
      busy=false;record.Enabled=true;folder.Enabled=true;choose.Enabled=true;converter.Enabled=true;recorder.Enabled=true;format.Enabled=true;
-     if(input!=null){weapon.Text=input.Weapon;sensitivity.Text=Ui.Sens(input.Sensitivity);}
+     if(input!=null){weapon.Text=WeaponVariant.DisplayName(input);sensitivity.Text=Ui.Sens(input.Sensitivity);}
      log.Text=error!=null?(selected==MacroFormat.XmlRazer?"XML non creato: ":"AMC non creato: ")+error+
       (snapshotPath!=null?"\r\nParametri conservati. Premi REPORT.":"\r\nPremi REPORT per la diagnostica."):
       (selected==MacroFormat.XmlRazer?"XML Razer salvato":"AMC salvato")+" · "+result.Moves+" MoveR\r\n"+result.OutputPath;

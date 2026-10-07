@@ -35,6 +35,7 @@ namespace RecoilProbe {
   internal const int WeaponMode = 0x1A00;
   internal const int WeaponBurst = 0x1A2C;
   internal const int WeaponReloading = 0x1A3C;
+  internal const int WeaponSilencerOn = 0x1A51;
   internal const int VDataMaxClip = 0x4D0;
   internal const int VDataName = 0x720;
   internal const int VDataFullAuto = 0x72D;

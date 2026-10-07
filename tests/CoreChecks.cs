@@ -243,6 +243,23 @@ internal static class CoreChecks {
     Check(info.WeaponAddress==weapon.ToInt64(),"Same entity index with another serial is skipped");
     Check(info.WeaponHandle==handle,"Entity reference validates serial with the invalid-handle flag adjustment");
     Check(info.Sensitivity==1.234567F,"Native sensitivity read preserves the original float precision");
+    IntPtr m4Name=Marshal.StringToHGlobalAnsi("weapon_m4a1");allocations.Add(m4Name);
+    Marshal.WriteInt16(weapon,Layout.AttributeManager+Layout.ItemView+Layout.ItemDefinitionIndex,60);
+    Marshal.WriteIntPtr(target,Layout.DesignerName,m4Name);Marshal.WriteInt32(weapon,Layout.WeaponClip,20);
+    Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,1);
+    GameIdentity m4Identity=IdentityReader.Read(memory,client.ToInt64(),pawn.ToInt64(),null);
+    Check(m4Identity.SilencerOn==true&&WeaponVariant.DisplayName(m4Identity)=="M4A1-S con silenziatore",
+     "Main detection reads the M4A1-S mounted silencer flag for its visible profile name");
+    Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,0);
+    GameIdentity withoutSilencer=IdentityReader.Read(memory,client.ToInt64(),pawn.ToInt64(),m4Identity);
+    Check(withoutSilencer.SilencerOn==false&&WeaponVariant.DisplayName(withoutSilencer)=="M4A1-S senza silenziatore",
+     "Cached M4A1-S detection refreshes the silencer state after removal instead of retaining the old label");
+    Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,2);
+    Reject(delegate{IdentityReader.Read(memory,client.ToInt64(),pawn.ToInt64(),m4Identity);},
+     "Invalid M4A1-S silencer flags cannot produce a misleading detection label");
+    Marshal.WriteByte(weapon,Layout.WeaponSilencerOn,0);
+    Marshal.WriteInt16(weapon,Layout.AttributeManager+Layout.ItemView+Layout.ItemDefinitionIndex,7);
+    Marshal.WriteIntPtr(target,Layout.DesignerName,name);Marshal.WriteInt32(weapon,Layout.WeaponClip,30);
     Marshal.WriteIntPtr(root,Layout.EntityNext,IntPtr.Zero);
     Marshal.WriteIntPtr(root,Layout.EntityPrevious,target);
     Marshal.WriteIntPtr(target,Layout.EntityPrevious,IntPtr.Zero);
