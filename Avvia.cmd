@@ -1,8 +1,8 @@
 @echo off
 cd /d "%~dp0"
-if not exist "CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.1.exe" (
+if not exist "CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.2.exe" (
   echo EXE non trovato. Estrai tutto il pacchetto completo prima di avviare.
   pause
   exit /b 1
 )
-start "" "%~dp0CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.1.exe"
+start "" "%~dp0CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.2.exe"

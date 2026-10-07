@@ -1,15 +1,15 @@
-// Field offsets: a2x/cs2-dumper, MIT, commit 2d204b1400eb08accfb4098ad954602448dacb07.
-// Snapshot 2026-10-01; target game build 14188. Capture tested on user-supplied V0.1 recording; new identity fields require a live test.
+// Field offsets: a2x/cs2-dumper, MIT, commit 4116de000e085d62bbd42334c67b35bda37bda4f.
+// Snapshot 2026-10-06; target game build 14189. Fields checked against the pinned dump; live CS2 validation is still required.
 namespace RecoilProbe {
  internal static class Layout {
-  internal const int TargetBuild = 14188;
-  internal const string SourceCommit = "2d204b1400eb08accfb4098ad954602448dacb07";
+  internal const int TargetBuild = 14189;
+  internal const string SourceCommit = "4116de000e085d62bbd42334c67b35bda37bda4f";
   // The dump global dwEntityList reads 0x1 in the tested 14188 session; use pawn identity links.
   internal const int EntityPrevious = 0x50;
   internal const int EntityNext = 0x58;
   internal const int EntityFlags = 0x30;
   internal const int EntityReferenceHandle = 0x10;
-  internal const int Sensitivity = 0x255D998;
+  internal const int Sensitivity = 0x255F998;
   internal const int SensitivityValue = 0x58;
   internal const int WeaponServices = 0x12F0;
   internal const int ActiveWeapon = 0x60;
@@ -45,10 +45,10 @@ namespace RecoilProbe {
   internal const int VDataRecoilMagnitude = 0x7A0;
   internal const int VDataRecoilMagnitudeVariance = 0x7A8;
   internal const int VDataRecoilSeed = 0x7D4;
-  internal const int LocalPawn = 0x2560698;
-  internal const int LocalController = 0x2538008;
-  internal const int ViewAngles = 0x25767E8;
-  internal const int GameRules = 0x255CE50;
+  internal const int LocalPawn = 0x2562808;
+  internal const int LocalController = 0x253A068;
+  internal const int ViewAngles = 0x25787E8;
+  internal const int GameRules = 0x255EE50;
   internal const int BuildNumber = 0x61CFE8;
   internal const int NetworkClient = 0x91AFC0;
   internal const int SignOnState = 0x230;

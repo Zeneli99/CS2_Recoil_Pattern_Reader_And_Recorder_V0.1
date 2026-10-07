@@ -8,7 +8,7 @@ using RecoilProbe;
 
 internal static class NoFireChecks {
  private static WeaponSnapshot Example() {
-  return new WeaponSnapshot {Weapon="AK47",Sensitivity=1.25F,Build=14188,SchemaCommit=Layout.SourceCommit,
+  return new WeaponSnapshot {Weapon="AK47",Sensitivity=1.25F,Build=Layout.TargetBuild,SchemaCommit=Layout.SourceCommit,
    NativeParametersRead=false,Native=new WeaponParameters {DesignerName="weapon_ak47",ItemDefinitionIndex=7,
     MaxClip=30,BulletsPerShot=1,FullAuto=true,RecoilSeed=223,Mode=0,CycleSeconds=0.1F,
     RecoilAngle=0,AngleVariance=70,RecoilMagnitude=30,MagnitudeVariance=0}};

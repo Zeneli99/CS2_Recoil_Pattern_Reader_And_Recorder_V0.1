@@ -447,6 +447,7 @@ internal static class CoreChecks {
    if(args.Length!=2)throw new Exception("Usage: CoreChecks.exe FIXTURE_DIRECTORY OUTPUT_DIRECTORY");
    string fixtures=Path.GetFullPath(args[0]),output=Path.GetFullPath(args[1]);
    Directory.CreateDirectory(output);
+   LayoutChecks.Run(fixtures,Check);
    Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
    StartupDiagnostics(output);
    RecoilDynamicsChecks();
