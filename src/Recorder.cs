@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace RecoilProbe {
  internal sealed class CaptureResult {
-  public string CsvPath, MetadataPath, AmcPath, AmcError, Reason, ExecutionReportPath, ExecutionError;
+  public string CsvPath, MetadataPath, AmcPath, AmcError, XmlPath, XmlError, Reason, ExecutionReportPath, ExecutionError;
   public int Samples, Shots, MissedShotUpdates;
   public double MaxGapMs, MedianGapMs, DurationMs, MaxReadMs;
  }
@@ -15,6 +15,7 @@ namespace RecoilProbe {
   internal volatile bool StopRequested;
   private readonly string directory;
   private readonly bool autoAmc;
+  private readonly bool autoXml;
   private readonly AmcInput expectedAmc;
   private readonly Action<string> status;
   private readonly Action<GameIdentity> identity;
@@ -22,8 +23,11 @@ namespace RecoilProbe {
    : this(folder,exportAmc,progress,delegate(GameIdentity value){}) { }
   internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected)
    : this(folder,exportAmc,progress,detected,null) { }
-  internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected,AmcInput test) {
+  internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected,AmcInput test)
+   : this(folder,exportAmc,progress,detected,test,false) { }
+  internal Recorder(string folder,bool exportAmc,Action<string> progress,Action<GameIdentity> detected,AmcInput test,bool exportXml) {
    directory=folder;autoAmc=exportAmc&&test==null;status=progress;identity=detected;expectedAmc=test;
+   autoXml=exportXml&&autoAmc;
   }
   internal CaptureResult Run() {
    using(Game game=new Game()) {
@@ -138,6 +142,12 @@ namespace RecoilProbe {
      AmcResult converted=AmcConverter.Convert(data,amcPath,info.Sensitivity);
      result.AmcPath=converted.AmcPath;meta["amc_generated"]=true;meta["amc_result"]=converted;
     } catch(Exception ex){result.AmcError=ex.Message;}
+   }
+   if(autoXml&&result.AmcPath!=null) {
+    try {
+     RazerXmlResult xml=RazerXmlExporter.Export(result.AmcPath,OutputFolders.Xml(result.AmcPath));
+     result.XmlPath=xml.XmlPath;meta["razer_xml_result"]=xml;
+    } catch(Exception ex){result.XmlError=ex.Message;}
    }
    RecordingIO.WriteJson(result.MetadataPath,meta);
    return result;

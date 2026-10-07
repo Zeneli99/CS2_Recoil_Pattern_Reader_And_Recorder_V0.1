@@ -10,12 +10,13 @@ namespace RecoilProbe {
   private TextBox weapon,sensitivity,folder,log;
   private Label detected;
   private Button record,report,converter,recorder,choose;
+  private CheckBox exportXml;
   private bool busy,detecting;
   private System.Windows.Forms.Timer monitor;
   private const int HotkeyId=8119;
   internal MainForm() {
-   Ui.Style(this,"CS2 SENZA SPARARE · V0.3.2 SPERIMENTALE");Ui.Title(this,"CS2 SENZA SPARARE");
-   Ui.Label(this,"V0.3.2",470,25,60,24);
+   Ui.Style(this,"CS2 SENZA SPARARE · V0.3.3 SPERIMENTALE");Ui.Title(this,"CS2 SENZA SPARARE");
+   Ui.Label(this,"V0.3.3",470,25,60,24);
    converter=Ui.Button(this,"CONVERTER",20,54,145,29);
    converter.Click+=delegate {using(ConverterForm form=new ConverterForm())form.ShowDialog(this);};
    recorder=Ui.Button(this,"RECORDER / TEST",180,54,165,29);
@@ -35,11 +36,12 @@ namespace RecoilProbe {
    choose.Click+=delegate {using(FolderBrowserDialog dialog=new FolderBrowserDialog()) {
     dialog.SelectedPath=folder.Text;if(dialog.ShowDialog(this)==DialogResult.OK)folder.Text=dialog.SelectedPath;
    }};
-   Ui.Label(this,"VData reali + modello NON verificato · smooth circa 10 ms",20,216,500,23);
+   exportXml=new CheckBox {Text="Esporta anche XML Razer · Synapse 4",Checked=false,
+    Location=new Point(20,214),Size=new Size(500,23),ForeColor=Color.Gainsboro};Controls.Add(exportXml);
    record=Ui.Button(this,"ESTRAI + AMC · F8",20,243,245,35);record.Click+=delegate {Extract();};
    Button open=Ui.Button(this,"Apri estrazioni",280,243,240,35);
    open.Click+=delegate {try{Directory.CreateDirectory(folder.Text);Process.Start(folder.Text);}catch(Exception ex){log.Text=ex.Message;}};
-   log=Ui.Text(this,"Non sparare. Ricarica, attendi il reset recoil, poi F8.\r\nSalvo AMC di prova + parametri .recoil.json + report.",20,292,500,true);
+   log=Ui.Text(this,"Non sparare. Ricarica, attendi il reset recoil, poi F8.\r\nAMC in /AMC; XML Razer opzionale in /XML.",20,292,500,true);
    log.Multiline=true;log.Size=new Size(500,52);
    monitor=new System.Windows.Forms.Timer {Interval=1500};monitor.Tick+=delegate {Detect();};
    FormClosing+=delegate(object sender,FormClosingEventArgs e){if(busy){e.Cancel=true;log.Text="Attendi il salvataggio dei file.";}};
@@ -63,22 +65,28 @@ namespace RecoilProbe {
   private void Extract() {
    if(busy||!Enabled)return;
    string outputFolder;try{outputFolder=Path.GetFullPath(folder.Text);}catch(Exception ex){log.Text=ex.Message;return;}
-   busy=true;record.Enabled=false;folder.Enabled=false;choose.Enabled=false;converter.Enabled=false;recorder.Enabled=false;
+   bool includeXml=exportXml.Checked;
+   busy=true;record.Enabled=false;folder.Enabled=false;choose.Enabled=false;converter.Enabled=false;recorder.Enabled=false;exportXml.Enabled=false;
    log.Text="Leggo VData e controllo che l'arma sia ferma...";
    ThreadPool.QueueUserWorkItem(delegate(object ignored) {
-    AmcResult result=null;WeaponSnapshot input=null;string error=null,snapshotPath=null;
+    AmcResult result=null;RazerXmlResult xml=null;WeaponSnapshot input=null;string error=null,xmlError=null,snapshotPath=null;
     try {
      using(Game game=new Game(false))input=WeaponDataReader.Extract(game);
-     string output=Path.Combine(outputFolder,NoFireGenerator.SuggestedFileName(input,input.Sensitivity));
+     string output=OutputFolders.Amc(Path.Combine(outputFolder,NoFireGenerator.SuggestedFileName(input,input.Sensitivity)));
      // Keep successfully extracted parameters even if AMC conversion subsequently fails.
      snapshotPath=WeaponSnapshotIO.Save(input,output);
      result=NoFireGenerator.Convert(input,output,input.Sensitivity);
+     if(includeXml) {
+      try{xml=RazerXmlExporter.Export(result.AmcPath,OutputFolders.Xml(result.AmcPath));}
+      catch(Exception ex){xmlError=ex.Message;}
+     }
     } catch(Exception ex){error=ex.Message;Diagnostics.Record(ex);}
     Ui.Post(this,delegate {
-     busy=false;record.Enabled=true;folder.Enabled=true;choose.Enabled=true;converter.Enabled=true;recorder.Enabled=true;
+     busy=false;record.Enabled=true;folder.Enabled=true;choose.Enabled=true;converter.Enabled=true;recorder.Enabled=true;exportXml.Enabled=true;
      if(input!=null){weapon.Text=input.Weapon;sensitivity.Text=Ui.Sens(input.Sensitivity);}
      log.Text=error!=null?error+(snapshotPath!=null?"\r\nParametri salvati: "+Path.GetFileName(snapshotPath):"\r\nPremi REPORT per la diagnostica."):
-      "AMC sperimentale salvato · "+result.Shots+" colpi · "+result.MoveCommands+" MoveR\r\n"+Path.GetFileName(result.AmcPath);
+      "AMC salvato · "+result.Shots+" colpi · "+result.MoveCommands+" MoveR\r\n"+
+       (xmlError!=null?"AMC conservato; XML non creato: "+xmlError:xml!=null?"AMC + XML Razer salvati in cartelle separate.":Path.GetFileName(result.AmcPath));
     });
    });
   }

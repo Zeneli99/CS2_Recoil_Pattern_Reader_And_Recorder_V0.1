@@ -1,21 +1,39 @@
-# CS2 Recoil Reader & Recorder V0.3.2 — compatibilita' build CS2 14189
+# RecoilLabs / CS2 Recoil Reader & Recorder V0.3.3 — XML Razer Synapse 4
 
-Questa versione aggiorna la compatibilita' alla build CS2 14189. Conserva senza modifiche la correzione dei delay della V0.3.1 secondo la convenzione dichiarata dalla registrazione AMC Fusion usata come riferimento: **1 ms di costo per comando MoveR**. Un movimento pianificato ogni 10 ms viene quindi scritto normalmente con Delay 9 ms e un MoveR. Se un movimento viene saltato perché X/Y arrotondati non cambiano, il delay successivo conta soltanto i comandi realmente emessi. I delta divisi in più MoveR contano ciascun comando.
+La V0.3.3 aggiunge l'export XML per **Razer Synapse 4** secondo la calibrazione M249 verificata in gioco dall'utente sul Naga V3 Pro. Mantiene la compatibilita' CS2 14189 della V0.3.2 e i motori AMC identici alla V0.3.1. L'AMC e' il master: l'export XML legge il file gia' salvato e non modifica X/Y, ordine o numero dei MoveR.
+
+Seleziona **Esporta anche XML Razer · Synapse 4** nella schermata principale o nel converter; nel recorder usa **XML Razer** insieme a **Genera AMC**. I file vengono salvati in sottocartelle sorelle **AMC** e **XML** della cartella scelta. I parametri e report AMC rimangono accanto al master. L'opzione XML parte disattivata; il risultato AMC non dipende dall'opzione. Se l'XML fallisce, l'AMC gia' salvato viene conservato e l'errore viene mostrato.
+
+Per convertire un AMC esistente direttamente, aprilo nel converter e premi **XML RAZER DA AMC**. Questo pulsante conserva tutti i comandi originali, anche consecutivi; non usa lo smoothing o i controlli di sensibilita'. **CONVERTI IN AMC**, con l'opzione XML attiva, mantiene invece il comportamento del converter esistente e deriva l'XML dall'AMC risultante. Un eventuale cambio di sensibilita' avviene nell'AMC tramite il converter esistente; l'XML non aggiunge un altro fattore.
+
+## Calibrazione Synapse 4
+
+Ogni Buffer successivo all'origine usa coordinate cumulative; la differenza X/Y riproduce esattamente il relativo MoveR AMC. Il tempo del Buffer e' la somma dei Delay AMC dall'ultimo movimento **+1 ms per quel MoveR**. Anche i MoveR consecutivi ricevono ciascuno 1 ms; non vengono fusi. Si leggono i comandi grezzi, senza riapplicare il costo gia' dichiarato da `MoveRCommandCostMs=1` nelle timeline AMC. Il master non viene corretto o riscritto.
+
+Il formato replica il golden verificato: `mmtSetting=3`, `MouseMoveType=relative`, Start Point (mouse cursor), origine 500/300 a tempo 0, LeftDown prima della traiettoria, LeftUp dopo il delay di rilascio originale. `Number` della traiettoria e' la somma dei tempi Buffer in secondi; i singoli tempi Buffer sono intervalli in millisecondi. La pausa Bloody dopo LeftUp viene omessa dall'XML. Importa in **Synapse 4**, che gestisce la modalita' di attivazione della macro nel proprio binding.
+
+Il golden M249 fornito e' `tests/fixtures/M249_Razer_Synapse4_CAL1_MoveCost1ms.xml`: **765 MoveR, X +25, Y +448, 7155 ms di Delay prima dell'ultimo movimento +765 ms =7920 ms di traiettoria**, poi **79 ms** fino a LeftUp (rilascio a 7999 ms). L'utente ha confermato il test in gioco. I test della nuova implementazione confrontano tutti i Buffer con questo file e verificano anche comandi consecutivi, costo gia' dichiarato, rilascio e assenza di modifiche al master. Il file AMC originale non e' stato materializzabile (403): il test M249 usa una fixture esplicitamente ricostruita dal golden XML, non pretende di confrontare i byte del master originale. Il golden XML resta nei test e non viene incorporato nell'EXE.
+
+Ogni XML ha un `.report.json` nella cartella XML, con percorso e SHA256 del master, numero di movimenti, X/Y, somma dei Delay, costo MoveR, tempo della traiettoria, tempo di rilascio e pausa omessa. L'export non esegue macro o input del mouse.
+
+## Generazione AMC invariata
+
+La generazione esistente conserva **1 ms di costo per comando MoveR**. Un movimento pianificato ogni 10 ms viene scritto normalmente con Delay 9 ms e un MoveR. Se un movimento viene saltato perché X/Y arrotondati non cambiano, il delay successivo conta soltanto i comandi realmente emessi. I delta divisi in più MoveR contano ciascun comando.
 
 La traiettoria, i punti dei colpi, la sensibilità, lo smoothing moderato e il rilascio pianificato restano invariati. L'importazione legge la convenzione dal Comment dell'AMC, così una successiva conversione non applica due volte la correzione. Gli AMC precedenti privi del nuovo campo conservano la convenzione delay-only.
 
-**Limite:** il millisecondo per comando è una convenzione del recorder, non una misura del dispositivo. I report indicano `CommandTimingMeasured=false`. Il modello senza sparare rimane sperimentale: legge VData reali ma ricostruisce impulsi e angoli. Questa correzione non è una dimostrazione della traiettoria balistica nativa né della concentrazione dei colpi in gioco. La registrazione privata di riferimento non è incorporata nell'EXE o nel repository.
+I report AMC esistenti mantengono `CommandTimingMeasured=false`; la calibrazione Razer e la verifica M249 fornite dall'utente vengono documentate nel report XML separato. Il modello senza sparare rimane sperimentale: legge VData reali ma ricostruisce impulsi e angoli. La verifica M249 della conversione tra dispositivi non prova la correttezza di tutte le nuove traiettorie generate. Il codice della generazione e i metadati AMC preesistenti non sono stati modificati.
 
-I controlli includono uno stream AMC golden indipendente, 300 comandi senza deriva del clock, delta divisi, conversione sensibilità, reimportazione e preservazione dei punti simulati/registrati. EXE e sorgenti completi sono pubblicati in `Downloads/V0.3.2` dopo la compilazione e i controlli Windows.
+I controlli includono uno stream AMC golden indipendente, 300 comandi senza deriva del clock, delta divisi, conversione sensibilità, reimportazione e preservazione dei punti simulati/registrati. EXE e sorgenti completi sono pubblicati in `Downloads/V0.3.3` dopo la compilazione e i controlli Windows.
 
 La schermata principale non avvia piu' una registrazione: **ESTRAI + AMC / F8** legge i parametri VData dell'arma attiva e crea una macro di prova senza sparare. Il recorder precedente rimane separato in **RECORDER / TEST**, solo per confronto e diagnostica.
 
-## Prova rapida V0.3.2
+## Prova rapida V0.3.3
 
-1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3.2_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.2.exe`.
+1. Estrai tutto `CS2_Recoil_Reader_Recorder_V0.3.3_FULL.zip` e apri `CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.3.exe`.
 2. Avvia CS2 con `-insecure`, in una mappa offline ospitata nello stesso processo. Per la prima prova usa AK47.
 3. Ricarica completamente, togli zoom/burst, lascia il sinistro rilasciato e aspetta il reset del recoil.
-4. Premi **F8 senza sparare**. In `Estrazioni` trovi `.amc`, `.recoil.json` e `.report.json`.
+4. Se desideri l'XML, seleziona **Esporta anche XML Razer · Synapse 4**, poi premi **F8 senza sparare**. In `Estrazioni/AMC` trovi `.amc`, `.recoil.json` e `.report.json`; l'XML opzionale e il suo report sono in `Estrazioni/XML`.
 5. Importa l'AMC in Bloody nella modalita' finche' tieni premuto. La macro e' sperimentale: questo passaggio e' una prova reale, non una verifica gia' eseguita.
 6. Se l'estrazione fallisce, premi REPORT e conserva `Diagnostica_CS2.txt`. Se il movimento non corrisponde, conserva i due JSON insieme all'AMC: contengono i valori usati, non occorre ricreare lo spray per rigenerare il file.
 
@@ -31,11 +49,11 @@ L'output conserva i punti **simulati** dei colpi e arrotonda la posizione cumula
 
 La modalita' senza sparare supporta solo full-auto, modalita' primaria senza zoom/burst, caricatore pieno e recoil azzerato. Per altri casi si ferma. Restano i controlli build 14189, `-insecure`, IsValveDS e presenza del modulo server locale; quest'ultimo non dimostra da solo che nessun client remoto sia connesso: usa una mappa offline. Il processo e' esterno e in sola lettura; nessuna DLL, hook, scrittura nella memoria del gioco o simulazione di input. Bloody esegue l'AMC, non questo programma.
 
-## Verifiche e distribuzione V0.3.2
+## Verifiche e distribuzione V0.3.3
 
 `build.ps1` compila l'EXE x64 con .NET Framework su Windows. GitHub Actions esegue i controlli esistenti e quelli nuovi su lettura VData nel solo processo di test, errori di puntatore/nome/flag, RNG, primo impulso confrontato con la fixture AK, ripetibilita', JSON, tempi, sensibilita', punti simulati e anteprime. **CS2 e Bloody non vengono avviati in CI.** Il primo impulso coincidente non dimostra che l'intero algoritmo corrente sia corretto.
 
-Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. `Esempio_NoFire_SINTETICO` contiene un esempio con parametri AK costruiti dal test, NON estratti da una sessione live. Gli esempi precedenti restano separati; non sono i risultati della nuova estrazione. I download della V0.3.2 vengono pubblicati in `Downloads/V0.3.2` solo dopo i controlli.
+Il pacchetto contiene EXE, sorgenti completi, workflow, verifiche, anteprime e SHA256. Gli esempi sono separati nelle cartelle `AMC` e `XML`. `AMC/Esempio_NoFire_SINTETICO` contiene parametri AK costruiti dal test, NON estratti da una sessione live. `XML/M249_GOLDEN_EXPORT.xml` e' il risultato del test golden ricostruito, non un'estrazione live. I download della V0.3.3 vengono pubblicati in `Downloads/V0.3.3` solo dopo i controlli.
 
 Fonti tecniche: [schema della build fissata](https://github.com/a2x/cs2-dumper/tree/4116de000e085d62bbd42334c67b35bda37bda4f/output), [implementazione legacy della tabella](https://github.com/SwagSoftware/Kisak-Strike/blob/master/game/shared/cstrike15/cs_weapon_parse.cpp) e [stream legacy](https://github.com/SwagSoftware/Kisak-Strike/blob/master/vstdlib/random.cpp). Le fonti legacy non sono una prova dell'implementazione attuale di CS2.
 
@@ -47,7 +65,7 @@ Il report del 7 ottobre rilevava la build 14189 e il blocco previsto della V0.3.
 
 Aggiornati i cinque indirizzi globali usati da client.dll: sensibilita', pawn, controller, angoli e regole. I campi schema usati da arma, VData e recoil risultano invariati. Restano le verifiche di build, sessione, puntatori e dati plausibili; il puntatore VData non-schema continua a richiedere la validazione live esistente.
 
-`AmcConverter.cs`, `AmcInput.cs`, `RecoilDynamics.cs` e `NoFireGenerator.cs` restano identici alla V0.3.1. La correzione dei delay di 1 ms/MoveR e il modello non vengono modificati. Il campo Version degli snapshot resta 0.3.1 come versione del generatore invariato, mentre interfaccia e assembly sono V0.3.2. Non viene aggiunta l'esportazione XML in questo aggiornamento di compatibilita'. La lettura della nuova build richiede una prova live dell'utente.
+`AmcConverter.cs`, `AmcInput.cs`, `RecoilDynamics.cs` e `NoFireGenerator.cs` restano identici alla V0.3.1 e alla V0.3.2. La correzione dei delay di 1 ms/MoveR e il modello non vengono modificati. Il campo Version degli snapshot resta 0.3.1 come versione del generatore invariato, mentre interfaccia e assembly sono V0.3.3. Il nuovo exporter XML e' separato; il layout resta quello della V0.3.2. La lettura della build 14189 richiede una prova live dell'utente.
 
 I test controllano ogni costante schema/globale del layout contro un manifest fissato al dump 14189. Le costanti non-schema vengono conservate con i controlli runtime esistenti. Gli input diagnostici storici 14188 restano tali: non vengono rinominati come registrazioni 14189.
 
@@ -118,7 +136,7 @@ Per ricompilare: powershell.exe -NoProfile -File .\build.ps1
 
 Le verifiche misurano anche ritardo, durata e guadagni su prove sintetiche quantizzate, controllano il rilascio registrato e impediscono la conversione delle prove AMC in pattern. Eseguono l'EXE, controllano la memoria del solo processo di test, i due layout, CSV/JSON, import ZIP, validazione degli errori, geometria/tempi e pausa dell'AMC, preservazione dei punti originali e import/suddivisione degli AMC. Una fixture contiene gli aggiornamenti selezionati dalla registrazione AK dell'utente, incluso il rollback; i campioni intermedi sono omessi e le colonne diagnostiche non necessarie al convertitore sono sintetiche.
 
-Il pacchetto include anche gli esempi precedenti. La cartella AMC_AK47 contiene la versione moderata dell'AMC importato: ogni punto originale rimane identico. Non confonderla con l'output della nuova modalita' senza sparare.
+Il pacchetto include anche gli esempi precedenti. La cartella AMC/AK47 contiene la versione moderata dell'AMC importato: ogni punto originale rimane identico. Non confonderla con l'output della nuova modalita' senza sparare.
 
 CS2 non viene eseguito in GitHub Actions. Le nuove letture automatiche dell'arma/sensibilità e la precisione della compensazione richiedono una prova reale.
 

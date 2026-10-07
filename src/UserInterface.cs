@@ -43,15 +43,15 @@ namespace RecoilProbe {
   private Label detected;
   private Button record,open,convert,choose,report,check;
   private AmcInput executionAmc;
-  private CheckBox autoAmc;
+  private CheckBox autoAmc,exportXml;
   private Recorder recorder;
   private Thread worker;
   private bool running,closing,detecting;
   private System.Windows.Forms.Timer monitor;
   private const int HotkeyId=8118;
   internal RecorderForm() {
-   Ui.Style(this,"CS2 RECORDER DIAGNOSTICO · V0.3.2");Ui.Title(this,"RECORDER DIAGNOSTICO");
-   Ui.Label(this,"V0.3.2",470,25,60,24);
+   Ui.Style(this,"CS2 RECORDER DIAGNOSTICO · V0.3.3");Ui.Title(this,"RECORDER DIAGNOSTICO");
+   Ui.Label(this,"V0.3.3",470,25,60,24);
    Button page=Ui.Button(this,"RECOIL INTERNO",20,54,145,29);page.Enabled=false;
    convert=Ui.Button(this,"CONVERTER",180,54,145,29);
    convert.Click+=delegate{using(ConverterForm form=new ConverterForm())form.ShowDialog(this);};
@@ -71,9 +71,12 @@ namespace RecoilProbe {
      if(dialog.ShowDialog(this)==DialogResult.OK)folder.Text=dialog.SelectedPath;
     }
    };
-   autoAmc=new CheckBox {Text="Genera AMC dopo lo spray",Checked=true,
-    Location=new Point(20,214),Size=new Size(250,23),ForeColor=Color.Gainsboro};
+   autoAmc=new CheckBox {Text="Genera AMC",Checked=true,
+    Location=new Point(20,214),Size=new Size(140,23),ForeColor=Color.Gainsboro};
    Controls.Add(autoAmc);
+   exportXml=new CheckBox {Text="XML Razer",Checked=false,
+    Location=new Point(165,214),Size=new Size(110,23),ForeColor=Color.Gainsboro};Controls.Add(exportXml);
+   autoAmc.CheckedChanged+=delegate{exportXml.Enabled=autoAmc.Checked&&!running&&executionAmc==null;};
    check=Ui.Button(this,"TEST AMC...",280,213,240,25);
    check.Click+=delegate {
     if(executionAmc!=null) {SetExecutionTest(null);return;}
@@ -138,22 +141,23 @@ namespace RecoilProbe {
   private void Toggle() {
    if(running){recorder.StopRequested=true;record.Enabled=false;return;}
    string path;try{path=Path.GetFullPath(folder.Text);}catch(Exception ex){Status(ex.Message);return;}
-   recorder=new Recorder(path,autoAmc.Checked,Status,delegate(GameIdentity info){Ui.Post(this,delegate{SetIdentity(info);});},executionAmc);
-   running=true;folder.Enabled=false;autoAmc.Enabled=false;convert.Enabled=false;choose.Enabled=false;check.Enabled=false;
+   recorder=new Recorder(path,autoAmc.Checked,Status,delegate(GameIdentity info){Ui.Post(this,delegate{SetIdentity(info);});},executionAmc,exportXml.Checked);
+   running=true;folder.Enabled=false;autoAmc.Enabled=false;exportXml.Enabled=false;convert.Enabled=false;choose.Enabled=false;check.Enabled=false;
    record.Text="FERMA · F8";
    worker=new Thread(delegate(){
     CaptureResult result=null;string error=null;
     try{result=recorder.Run();}catch(Exception ex){error=ex.Message;Diagnostics.Record(ex);}
     Ui.Post(this,delegate{
      running=false;record.Enabled=true;record.Text=executionAmc==null?"ARMA / FERMA · F8":"PROVA AMC · F8";folder.Enabled=true;
-     autoAmc.Enabled=executionAmc==null;convert.Enabled=true;choose.Enabled=true;check.Enabled=true;
+     autoAmc.Enabled=executionAmc==null;exportXml.Enabled=executionAmc==null&&autoAmc.Checked;convert.Enabled=true;choose.Enabled=true;check.Enabled=true;
      if(error!=null)log.Text=error+"\r\nPremi REPORT per aprire Diagnostica_CS2.txt.";
      else if(result==null)log.Text="Registrazione annullata prima del primo colpo.";
      else {
       log.Text=result.Shots+" colpi · "+result.Samples+" campioni · gap max "+
        result.MaxGapMs.ToString("F2",CultureInfo.CurrentCulture)+" ms\r\n"+
        (result.ExecutionReportPath!=null?"Test salvato: "+Path.GetFileName(result.ExecutionReportPath):
-        result.ExecutionError??(result.AmcPath!=null?"AMC salvato: "+Path.GetFileName(result.AmcPath):
+        result.ExecutionError??(result.AmcPath!=null?(result.XmlError!=null?"AMC salvato; errore XML: "+result.XmlError:
+         result.XmlPath!=null?"AMC + XML Razer salvati.":"AMC salvato: "+Path.GetFileName(result.AmcPath)):
         result.AmcError??"CSV + JSON salvati."));
      }
      if(closing)Close();
@@ -162,7 +166,7 @@ namespace RecoilProbe {
    worker.IsBackground=true;worker.Name="CS2 read-only recorder";worker.Start();
   }
   private void SetExecutionTest(AmcInput selected) {
-   executionAmc=selected;autoAmc.Enabled=selected==null;
+   executionAmc=selected;autoAmc.Enabled=selected==null;exportXml.Enabled=selected==null&&autoAmc.Checked;
    check.Text=selected==null?"TEST AMC...":"ESCI DAL TEST";
    record.Text=selected==null?"ARMA / FERMA · F8":"PROVA AMC · F8";
    log.Text=selected==null?"F8, torna al gioco, attendi un secondo e spara senza muovere il mouse.":
@@ -177,14 +181,14 @@ namespace RecoilProbe {
  }
  internal sealed class ConverterForm : Form {
   private TextBox source,target,summary,log;
-  private Button load,convert;
-  private CheckBox original;
+  private Button load,convert,xmlOnly;
+  private CheckBox original,alsoXml;
   private RecordingData data;
   private WeaponSnapshot snapshot;
   private AmcInput amc;
   private bool busy;
   internal ConverterForm() {
-   Ui.Style(this,"CS2 AMC CONVERTER · V0.3.2");Ui.Title(this,"AMC CONVERTER");
+   Ui.Style(this,"CS2 AMC CONVERTER · V0.3.3");Ui.Title(this,"AMC CONVERTER");
    Ui.Label(this,"Apri AMC / ZIP / CSV / JSON · oppure trascina un file.",20,55,500,24);
    source=Ui.Text(this,"Nessuna registrazione caricata",20,87,375,true);
    load=Ui.Button(this,"APRI FILE",410,85,110,29);load.Click+=delegate{Choose();};
@@ -194,9 +198,13 @@ namespace RecoilProbe {
     Location=new Point(20,187),Size=new Size(315,23),ForeColor=Color.Gainsboro};
    Controls.Add(original);target=Ui.Text(this,"1.250",365,187,155,false);target.Enabled=false;
    original.CheckedChanged+=delegate{target.Enabled=!original.Checked && !busy;};
-   Ui.Label(this,"Smooth moderato · circa 10 ms · click hold · pausa 30 s",20,219,500,23);
-   convert=Ui.Button(this,"CONVERTI IN AMC",20,249,500,37);convert.Enabled=false;
+   alsoXml=new CheckBox {Text="Esporta anche XML Razer · Synapse 4",Checked=false,
+    Location=new Point(20,216),Size=new Size(500,23),ForeColor=Color.Gainsboro};Controls.Add(alsoXml);
+   alsoXml.CheckedChanged+=delegate{convert.Text=alsoXml.Checked?"CONVERTI AMC + XML":"CONVERTI IN AMC";};
+   convert=Ui.Button(this,"CONVERTI IN AMC",20,249,245,37);convert.Enabled=false;
    convert.Click+=delegate{Export();};
+   xmlOnly=Ui.Button(this,"XML RAZER DA AMC",280,249,240,37);xmlOnly.Enabled=false;
+   xmlOnly.Click+=delegate{ExportExistingXml();};
    log=Ui.Text(this,"Conversione di prova: pitch/yaw 0.022 e recoil scale 2.0 assunti.",20,302,500,true);
    log.Multiline=true;log.Size=new Size(500,42);
    AllowDrop=true;
@@ -218,6 +226,7 @@ namespace RecoilProbe {
   }
   private void Busy(bool value) {
    busy=value;load.Enabled=!value;convert.Enabled=!value && (data!=null||amc!=null||snapshot!=null);
+   xmlOnly.Enabled=!value&&amc!=null;alsoXml.Enabled=!value;
    original.Enabled=!value;target.Enabled=!value && !original.Checked;
   }
   private void LoadRecording(string path) {
@@ -269,13 +278,44 @@ namespace RecoilProbe {
     dialog.OverwritePrompt=true;
     if(dialog.ShowDialog(this)!=DialogResult.OK)return;output=dialog.FileName;
    }
-   Busy(true);log.Text="Creo AMC e report...";
+   output=OutputFolders.Amc(output);bool includeXml=alsoXml.Checked;
+   Busy(true);log.Text=includeXml?"Creo AMC, XML Razer e report...":"Creo AMC e report...";
    ThreadPool.QueueUserWorkItem(delegate(object ignored){
-    AmcResult result=null;string error=null;
-    try{result=snapshot!=null?NoFireGenerator.Convert(snapshot,output,sens):amc!=null?AmcConverter.Smooth(amc,output,sens):AmcConverter.Convert(data,output,sens);}catch(Exception ex){error=ex.Message;}
+    AmcResult result=null;RazerXmlResult xml=null;string error=null,xmlError=null;
+    try {
+     result=ExportMaster(snapshot,amc,data,output,sens);
+     if(includeXml) {
+      try{xml=RazerXmlExporter.Export(result.AmcPath,OutputFolders.Xml(result.AmcPath));}
+      catch(Exception ex){xmlError=ex.Message;}
+     }
+    }catch(Exception ex){error=ex.Message;}
     Ui.Post(this,delegate{
      log.Text=error??((result.SourceKind=="AMC"?"AMC":result.Shots+" colpi")+" · "+result.MoveCommands+" MoveR · "+
-      result.ActiveDurationMs.ToString("F0",CultureInfo.InvariantCulture)+" ms\r\nAMC e report salvati.");
+      result.ActiveDurationMs.ToString("F0",CultureInfo.InvariantCulture)+" ms\r\n"+
+      (xmlError!=null?"AMC salvato; errore XML: "+xmlError:xml!=null?"AMC + XML salvati in /AMC e /XML.":"AMC e report salvati in /AMC."));
+     Busy(false);
+    });
+   });
+  }
+  internal static AmcResult ExportMaster(WeaponSnapshot input,AmcInput macro,RecordingData recording,string output,double sens) {
+   return input!=null?NoFireGenerator.Convert(input,output,sens):macro!=null?AmcConverter.Smooth(macro,output,sens):AmcConverter.Convert(recording,output,sens);
+  }
+  private void ExportExistingXml() {
+   if(amc==null||busy)return;
+   string output;
+   using(SaveFileDialog dialog=new SaveFileDialog()) {
+    dialog.Filter="Razer Synapse 4 (*.xml)|*.xml";
+    dialog.FileName=Path.GetFileNameWithoutExtension(amc.SourcePath)+"_Razer.xml";
+    dialog.InitialDirectory=Path.GetDirectoryName(amc.SourcePath);dialog.OverwritePrompt=true;
+    if(dialog.ShowDialog(this)!=DialogResult.OK)return;output=OutputFolders.Xml(dialog.FileName);
+   }
+   // Direct export deliberately reads the original commands, regardless of sensitivity controls.
+   string master=amc.SourcePath;Busy(true);log.Text="Esporto XML con X/Y e comandi dell'AMC originale...";
+   ThreadPool.QueueUserWorkItem(delegate(object ignored) {
+    RazerXmlResult result=null;string error=null;
+    try{result=RazerXmlExporter.Export(master,output);}catch(Exception ex){error=ex.Message;}
+    Ui.Post(this,delegate {
+     log.Text=error??("XML Razer · "+result.MoveCommands+" MoveR · "+result.MovementDurationMs+" ms\r\nAMC originale conservato; nessun cambio di sensibilita'.");
      Busy(false);
     });
    });

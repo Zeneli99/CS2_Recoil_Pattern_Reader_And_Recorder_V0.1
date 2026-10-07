@@ -69,6 +69,12 @@ internal static class CoreChecks {
     Check(typeof(ConverterForm).GetField(inputField,flags).GetValue(form)!=null&&
      ((Button)typeof(ConverterForm).GetField("convert",flags).GetValue(form)).Enabled,
      "Converter opens "+inputField+" asynchronously and enables export without a running game");
+    Check(((Button)typeof(ConverterForm).GetField("xmlOnly",flags).GetValue(form)).Enabled==(inputField=="amc"),
+     "Direct XML export is enabled only for an existing AMC master");
+    CheckBox alsoXml=(CheckBox)typeof(ConverterForm).GetField("alsoXml",flags).GetValue(form);
+    alsoXml.Checked=true;
+    Check(((Button)typeof(ConverterForm).GetField("convert",flags).GetValue(form)).Text.Contains("AMC + XML"),
+     "Converter option selects AMC plus the separate XML output");
    }
    form.Refresh();Application.DoEvents();
    foreach(Control child in form.Controls)
@@ -586,6 +592,7 @@ internal static class CoreChecks {
     Path.Combine(fixtures,"AK47_ORIGINAL_50MS_V022.amc"));
    Preview(new ConverterForm(),Path.Combine(output,"UI_CONVERTER_NO_FIRE.png"),
     Path.Combine(output,"AK47_NO_FIRE_SYNTHETIC_TEST.recoil.json"));
+   RazerChecks.Run(fixtures,output,Check,Reject);
    Check(File.Exists(Path.Combine(output,"UI_CONVERTER.png")),"Converter preview fits the compact window");
    Console.WriteLine("PASS: "+count+" conversion and recording regression checks.");
    Console.WriteLine("No CS2 process was opened. Live weapon/sensitivity detection and recoil accuracy need an in-game test.");
