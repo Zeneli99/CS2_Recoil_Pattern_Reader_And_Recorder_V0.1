@@ -12,8 +12,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: System.Reflection.AssemblyTitle("CS2 Recoil Probe")]
-[assembly: System.Reflection.AssemblyVersion("0.3.7.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.3.7.0")]
+[assembly: System.Reflection.AssemblyVersion("0.3.8.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.3.8.0")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("CoreChecks")]
 
 namespace RecoilProbe {
@@ -115,6 +115,7 @@ namespace RecoilProbe {
   internal ReadMemory Memory;
   internal int Pid, Build;
   internal long Client, Engine, Pawn, Controller, Services, Camera, Rules;
+  internal SessionRulesReference RulesReference;
   internal string ClientVersion, EngineVersion;
   private GameIdentity currentIdentity;
   internal GameIdentity ReadIdentity() {
@@ -159,7 +160,8 @@ namespace RecoilProbe {
       Layout.TargetBuild + ". Lettura interrotta: servono dati della stessa build.");
     Pawn = Memory.NamedPointer(Client + Layout.LocalPawn,"Giocatore locale");
     Controller = Memory.NamedPointer(Client + Layout.LocalController,"Controller locale");
-    Rules = Memory.NamedPointer(Client + Layout.GameRules,"Regole della sessione");
+    RulesReference = SessionRulesReference.Read(Memory,Pawn);
+    Rules = RulesReference.Rules;
     if (Memory.Byte(Controller + Layout.IsLocalController) != 1)
      throw new InvalidOperationException("Controller locale non validato.");
     VerifySession();
@@ -186,6 +188,9 @@ namespace RecoilProbe {
     (Services!=0 && Memory.NamedPointer(Pawn + Layout.AimPunchServices,"Servizi del recoil") != Services) ||
     (Camera!=0 && Memory.NamedPointer(Pawn + Layout.CameraServices,"Servizi della telecamera") != Camera))
     throw new InvalidOperationException("Pawn o mappa cambiati. Ripeti la prova.");
+   if(RulesReference==null||RulesReference.Rules!=Rules)
+    throw new InvalidOperationException("Regole della sessione non validate.");
+   RulesReference.Validate(Memory);
    if (Memory.Byte(Rules + Layout.IsValveServer) != 0)
     throw new InvalidOperationException("Server Valve rilevato. Usa una mappa di pratica locale.");
    int health = Memory.Int(Pawn + Layout.Health);

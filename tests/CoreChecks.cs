@@ -293,10 +293,18 @@ internal static class CoreChecks {
     Marshal.WriteInt32(network,Layout.SignOnState,6);
     Marshal.WriteInt32(pawn,Layout.Health,100);Marshal.WriteByte(pawn,Layout.LifeState,0);
     Marshal.WriteByte(rules,Layout.IsValveServer,0);
+    IntPtr rulesProxy=Allocate(allocations,0x700),rulesIdentity=Allocate(allocations,0x70);
+    IntPtr rulesName=Marshal.StringToHGlobalAnsi("cs_gamerules");allocations.Add(rulesName);
+    SetupIdentity(rulesIdentity,rulesProxy,(1U<<15)|40U,target,IntPtr.Zero,0);
+    Marshal.WriteIntPtr(target,Layout.EntityNext,rulesIdentity);
+    Marshal.WriteIntPtr(rulesIdentity,Layout.DesignerName,rulesName);
+    Marshal.WriteIntPtr(rulesProxy,Layout.EntityIdentity,rulesIdentity);
+    Marshal.WriteIntPtr(rulesProxy,Layout.GameRulesProxy,rules);
     using(Process own=Process.GetCurrentProcess()) {
      Game session=(Game)FormatterServices.GetUninitializedObject(typeof(Game));
      session.Process=own;session.Memory=memory;session.Client=client.ToInt64();
      session.Engine=engine.ToInt64();session.Pawn=pawn.ToInt64();session.Rules=rules.ToInt64();
+     session.RulesReference=SessionRulesReference.Read(memory,pawn.ToInt64());
      session.Services=0;session.VerifySession();
      Check(true,"Core session verification permits detection before recoil services are required");
      Reject(delegate{session.Read();},"Recording still refuses absent recoil services instead of fabricating values");
@@ -470,6 +478,7 @@ internal static class CoreChecks {
    string fixtures=Path.GetFullPath(args[0]),output=Path.GetFullPath(args[1]);
    Directory.CreateDirectory(output);
    LayoutChecks.Run(fixtures,Check);
+   SessionRulesChecks.Run(Check,Reject);
    Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
    StartupDiagnostics(output);
    RecoilDynamicsChecks();

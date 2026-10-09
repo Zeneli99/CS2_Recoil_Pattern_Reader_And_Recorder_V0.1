@@ -8,7 +8,7 @@ $buildOutput = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 } else { [System.IO.Path]::GetFullPath((Join-Path $buildRoot $OutputDirectory)) }
 [void][System.IO.Directory]::CreateDirectory($buildOutput)
-$buildExeName = 'CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.7.exe'
+$buildExeName = 'CS2_Recoil_Pattern_Reader_And_Recorder_V0.3.8.exe'
 $buildExe = Join-Path $buildOutput $buildExeName
 $buildReferences = @('/r:System.dll','/r:System.Core.dll','/r:System.Drawing.dll',
     '/r:System.Windows.Forms.dll','/r:System.Management.dll','/r:System.Web.Extensions.dll',
@@ -16,7 +16,8 @@ $buildReferences = @('/r:System.dll','/r:System.Core.dll','/r:System.Drawing.dll
 $buildArguments = @('/nologo','/codepage:65001','/target:winexe','/platform:x64','/optimize+',
     ('/out:' + $buildExe)) + $buildReferences + @(
     (Join-Path $buildRoot 'src/Program.cs'), (Join-Path $buildRoot 'src/Layout.cs'),
-    (Join-Path $buildRoot 'src/GameIdentity.cs'), (Join-Path $buildRoot 'src/RecordingIO.cs'),
+    (Join-Path $buildRoot 'src/GameIdentity.cs'), (Join-Path $buildRoot 'src/SessionRules.cs'),
+    (Join-Path $buildRoot 'src/RecordingIO.cs'),
     (Join-Path $buildRoot 'src/NoFireGenerator.cs'), (Join-Path $buildRoot 'src/ExtractorForm.cs'),
     (Join-Path $buildRoot 'src/RecoilDynamics.cs'), (Join-Path $buildRoot 'src/AmcConverter.cs'),
     (Join-Path $buildRoot 'src/AmcInput.cs'), (Join-Path $buildRoot 'src/RazerXmlExporter.cs'),
@@ -40,7 +41,7 @@ $buildCore = Join-Path $buildOutput 'CoreChecks.exe'
 $buildCoreArguments = @('/nologo','/codepage:65001','/target:exe','/platform:x64',
     ('/out:' + $buildCore), ('/r:' + $buildExe)) + $buildReferences +
     @((Join-Path $buildRoot 'tests/CoreChecks.cs'), (Join-Path $buildRoot 'tests/NoFireChecks.cs'),
-      (Join-Path $buildRoot 'tests/AmcTimingChecks.cs'), (Join-Path $buildRoot 'tests/LayoutChecks.cs'),
+      (Join-Path $buildRoot 'tests/AmcTimingChecks.cs'), (Join-Path $buildRoot 'tests/LayoutChecks.cs'), (Join-Path $buildRoot 'tests/SessionRulesChecks.cs'),
       (Join-Path $buildRoot 'tests/RazerChecks.cs'), (Join-Path $buildRoot 'tests/ExportSelectionChecks.cs'))
 & $buildCompiler @buildCoreArguments
 if ($LASTEXITCODE -ne 0) { throw 'Conversion check compilation failed.' }
@@ -55,7 +56,7 @@ Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_CONVERTER_AMC.png') -Dest
 Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_CONVERTER_NO_FIRE.png') -Destination $buildOutput -Force
 Copy-Item -LiteralPath (Join-Path $buildCoreOutput 'UI_RECORDER.png') -Destination $buildOutput -Force
 
-$buildPackage = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.7_FULL'
+$buildPackage = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.8_FULL'
 [void][System.IO.Directory]::CreateDirectory($buildPackage)
 Copy-Item -LiteralPath $buildExe -Destination $buildPackage -Force
 foreach ($buildItem in @('Avvia.cmd','LEGGIMI.txt','a2x-LICENSE.txt','README.md','ANALISI_AK47.md')) {
@@ -99,11 +100,18 @@ foreach ($buildItem in @('build.ps1','Avvia.cmd','LEGGIMI.txt','a2x-LICENSE.txt'
 }
 $buildCommit = if ([string]::IsNullOrWhiteSpace($env:GITHUB_SHA)) { 'local build' } else { $env:GITHUB_SHA }
 $buildInfo = @(
-    'CS2 Recoil Pattern Reader And Recorder V0.3.7 EXPERIMENTAL',
+    'CS2 Recoil Pattern Reader And Recorder V0.3.8 EXPERIMENTAL',
     ('Commit: ' + $buildCommit),
     ('UTC: ' + [DateTime]::UtcNow.ToString('o')),
     'Platform: Windows x64, .NET Framework',
-    'Target engine build: 14189',
+    'Target engine build: 14190',
+    'Pinned dump: sezzyaep/CS2-OFFSETS fa24ed457f096f519d2cdbb95db55f4b7bc5c6df',
+    'Client schema cross-checked against spotted-wtf/CS2-OFFSETS 35cb4039861708501bd2cf72850036575c56cbd6',
+    'Sensitivity, pawn, controller and view-angle globals updated; pawn eye-angle field moved to 0x3600',
+    'Conflicting dwGameRules globals excluded: exact named cs_gamerules entity and schema m_pGameRules used instead',
+    'Rules pointer and entity identity revalidated before session checks; invalid, stale or ambiguous rules rejected',
+    'Rules resolver and preserved Valve/session guards tested only in allocated test-process memory',
+    'AMC/XML exporters, generation model, weapon variants and timing source identical to V0.3.7',
     'M4A1-S entity/VData name alias accepted only for item definition 60; silenced VData required',
     'Reported M4A1-S name mismatch reproduced in test memory; wrong IDs/names rejected and selected XML extraction tested',
     'M4A1-S mode 1 accepted only for ID 60 and silenced VData; mode 0 behavior preserved',
@@ -135,7 +143,7 @@ $buildHash = (Get-FileHash -LiteralPath $buildExe -Algorithm SHA256).Hash
 ($buildHash + '  ' + $buildExeName) | Set-Content -LiteralPath (Join-Path $buildPackage 'SHA256.txt') -Encoding ASCII
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$buildZip = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.7_FULL.zip'
+$buildZip = Join-Path $buildOutput 'CS2_Recoil_Reader_Recorder_V0.3.8_FULL.zip'
 if (Test-Path -LiteralPath $buildZip) { throw 'ZIP already exists; choose a fresh output directory.' }
 Add-Type -AssemblyName System.IO.Compression
 $buildStream = [System.IO.File]::Open($buildZip, [System.IO.FileMode]::CreateNew)

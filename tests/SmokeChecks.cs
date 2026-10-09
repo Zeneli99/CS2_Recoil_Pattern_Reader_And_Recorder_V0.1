@@ -34,14 +34,14 @@ internal static class SmokeChecks {
    Assembly program = Assembly.LoadFrom(executable);
    Check(IntPtr.Size == 8, "Windows x64 test process");
    Check(program.GetName().ProcessorArchitecture == ProcessorArchitecture.Amd64, "EXE targets AMD64");
-   Check(program.GetName().Version.ToString() == "0.3.7.0", "Version 0.3.7.0");
+   Check(program.GetName().Version.ToString() == "0.3.8.0", "Version 0.3.8.0");
    Check(program.EntryPoint.IsDefined(typeof(STAThreadAttribute), false), "GUI entry point uses STA");
    Type native = program.GetType("RecoilProbe.Native", true);
    uint rights = (uint)native.GetField("ReadOnlyRights", Static).GetRawConstantValue();
    Check(rights == 0x0410, "Process access is query plus VM_READ");
    Check((rights & (0x0020 | 0x0008)) == 0, "No VM_WRITE or VM_OPERATION rights");
    Type layout = program.GetType("RecoilProbe.Layout", true);
-   Check((int)layout.GetField("TargetBuild", Static).GetRawConstantValue() == 14189, "Target build 14189");
+   Check((int)layout.GetField("TargetBuild", Static).GetRawConstantValue() == 14190, "Target build 14190");
 
    Type readType = program.GetType("RecoilProbe.ReadMemory", true);
    byte[] expected = Encoding.UTF8.GetBytes("Readonly native interop check");

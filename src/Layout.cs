@@ -1,15 +1,17 @@
-// Field offsets: a2x/cs2-dumper, MIT, commit 4116de000e085d62bbd42334c67b35bda37bda4f.
-// Snapshot 2026-10-06; target game build 14189. Fields checked against the pinned dump; live CS2 validation is still required.
+// Fields/globals: sezzyaep/CS2-OFFSETS fa24ed457f096f519d2cdbb95db55f4b7bc5c6df.
+// Client schema corroborated by spotted-wtf/CS2-OFFSETS 35cb4039861708501bd2cf72850036575c56cbd6.
+// Snapshot 2026-10-08; target build 14190. Disputed dwGameRules is not used; resolve cs_gamerules instead.
+// Historical a2x-derived fields retain their bundled MIT attribution. Live CS2 validation is still required.
 namespace RecoilProbe {
  internal static class Layout {
-  internal const int TargetBuild = 14189;
-  internal const string SourceCommit = "4116de000e085d62bbd42334c67b35bda37bda4f";
+  internal const int TargetBuild = 14190;
+  internal const string SourceCommit = "fa24ed457f096f519d2cdbb95db55f4b7bc5c6df";
   // The dump global dwEntityList reads 0x1 in the tested 14188 session; use pawn identity links.
   internal const int EntityPrevious = 0x50;
   internal const int EntityNext = 0x58;
   internal const int EntityFlags = 0x30;
   internal const int EntityReferenceHandle = 0x10;
-  internal const int Sensitivity = 0x255F998;
+  internal const int Sensitivity = 0x25596C8;
   internal const int SensitivityValue = 0x58;
   internal const int WeaponServices = 0x12F0;
   internal const int ActiveWeapon = 0x60;
@@ -46,10 +48,10 @@ namespace RecoilProbe {
   internal const int VDataRecoilMagnitude = 0x7A0;
   internal const int VDataRecoilMagnitudeVariance = 0x7A8;
   internal const int VDataRecoilSeed = 0x7D4;
-  internal const int LocalPawn = 0x2562808;
-  internal const int LocalController = 0x253A068;
-  internal const int ViewAngles = 0x25787E8;
-  internal const int GameRules = 0x255EE50;
+  internal const int LocalPawn = 0x255C3C8;
+  internal const int LocalController = 0x25338A8;
+  internal const int ViewAngles = 0x2572AE8;
+  internal const int GameRulesProxy = 0x600;
   internal const int BuildNumber = 0x61CFE8;
   internal const int NetworkClient = 0x91AFC0;
   internal const int SignOnState = 0x230;
@@ -60,7 +62,7 @@ namespace RecoilProbe {
   internal const int LastFiredTime = 0x15AC;
   internal const int WeaponHash = 0x15DC;
   internal const int AimPunchServices = 0x1598;
-  internal const int EyeAngles = 0x35F0;
+  internal const int EyeAngles = 0x3600;
   internal const int TickBase = 0x6B8;
   internal const int IsLocalController = 0x790;
   internal const int IsValveServer = 0xA4;
